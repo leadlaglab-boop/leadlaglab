@@ -1,0 +1,2 @@
+/status  /changelog  301
+/data/*  /data/:splat  200

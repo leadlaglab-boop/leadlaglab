@@ -1,0 +1,376 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadEvalResults, formatNumber, formatPct, formatDate } from "@/lib/data";
+
+export function getStaticPaths() {
+  return [
+    { params: { slug: "wiki-pageviews" } },
+    { params: { slug: "gdelt-news-tone" } },
+    { params: { slug: "google-trends" } },
+    { params: { slug: "sec-filings" } },
+  ];
+}
+
+const { slug } = Astro.params;
+const evalResults = loadEvalResults();
+
+const signalMeta: Record<string, {
+  name: string; key: string; family: string; source: string;
+  description: string; methodology: string; limitations: string;
+}> = {
+  "wiki-pageviews": {
+    name: "Wikipedia Pageviews",
+    key: "wiki_pageviews",
+    family: "Public Attention",
+    source: "Wikimedia REST API (official, free)",
+    description: "Daily article-view counts for each company's primary Wikipedia page. Abnormal attention is measured as a trailing 60-day z-score, then cross-sectionally ranked within date and sector.",
+    methodology: "For each trading day t, we compute z = (views_t − μ_{t-60,t-1}) / σ_{t-60,t-1}. Securities with fewer than 20 valid observations in the window are excluded. The z-score is then ranked cross-sectionally within sector on that date. Empirical Bayes shrinkage toward the sector mean is applied for companies with thin coverage.",
+    limitations: "Company→article mapping requires manual curation. Ambiguous names (e.g., 'Block', 'Target') are handled with documented rules; precision is audited quarterly. Wikipedia pageviews can spike for reasons unrelated to financial news (celebrity death, product launch, sports).",
+  },
+  "gdelt-news-tone": {
+    name: "GDELT News Tone",
+    key: "gdelt_news_tone",
+    family: "News Sentiment",
+    source: "GDELT GKG v2 (open data)",
+    description: "Daily article count and average tone from GDELT's Global Knowledge Graph, matched to companies via name/alias dictionaries. Scored with both FinBERT (ProsusAI/finbert) and VADER so the two scorers can be directly compared.",
+    methodology: "For each company, we query GDELT GKG for articles mentioning the company name or any registered alias within each trading day. We compute: (1) raw article count, (2) mean GDELT tone field, (3) FinBERT positive probability, (4) VADER compound score. Each is z-scored vs. trailing 60-day window and cross-sectionally ranked.",
+    limitations: "Entity matching is approximate; precision audited on 200 randomly sampled article-company pairs per source. GDELT includes many marginal articles. Tone in global news may not reflect US equity-relevant sentiment.",
+  },
+  "google-trends": {
+    name: "Google Trends",
+    key: "google_trends",
+    family: "Search Interest",
+    source: "pytrends (unofficial, rate-limited)",
+    description: "Relative search interest index for each company's ticker and primary name, normalized with an anchor term (e.g., 'stock market') to make cross-date comparisons meaningful.",
+    methodology: "Queries use pytrends with a comparison anchor term so the 0–100 scale is consistent across dates. We batch requests to avoid rate limits and cache aggressively. Each series is converted to a weekly-to-daily interpolated z-score. Data degrades gracefully if the API is blocked.",
+    limitations: "Unofficial API with no SLA. Sampling noise is documented; two queries for the same term on the same day can return different values. Geographic normalization limited to 'US'.",
+  },
+  "sec-filings": {
+    name: "SEC Filings",
+    key: "sec_filings",
+    family: "Filings Activity",
+    source: "SEC EDGAR (public government data)",
+    description: "Form 4 insider transactions, 8-K filing counts, and 13F position changes. EDGAR acceptance timestamps give clean observed_at dates with no look-ahead risk.",
+    methodology: "Form 4: For each company-day, we aggregate insider buy/sell transaction amounts and compute net buy ratio = (buy_$) / (buy_$ + sell_$), shrunk toward 0.5 with n/(n+κ) for small sample sizes (κ=10). 8-K: abnormal count vs trailing base rate. All signals are cross-sectionally ranked within date and sector.",
+    limitations: "Insiders transact for non-informational reasons (10b5-1 plans, diversification, taxes). Form 4 has a 2-day filing window so observed_at can lag the transaction date. Institutional (13F) filings are quarterly.",
+  },
+};
+
+const meta = signalMeta[slug as string];
+if (!meta) {
+  return Astro.redirect("/signals");
+}
+
+const signalResults = evalResults.results.filter((r) => r.feature === meta.key);
+const hasResults = signalResults.length > 0;
+
+const horizons = [1, 5, 21];
+const cohorts = ["sp500", "retail_attention"];
+
+function getResult(horizon: number, cohort: string) {
+  return signalResults.find((r) => r.horizon_days === horizon && r.cohort === cohort);
+}
+---
+
+<Base
+  title={meta.name}
+  description={`${meta.name} signal: definition, methodology, evaluation results, and honest assessment. Part of the Lead/Lag Lab alt-data study.`}
+>
+  <div class="container page-container">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/signals">Signals</a>
+      <span aria-hidden="true"> / </span>
+      <span aria-current="page">{meta.name}</span>
+    </nav>
+
+    <header class="page-header">
+      <div class="signal-badges">
+        <span class="badge badge-neutral">{meta.family}</span>
+        <span class="badge badge-neutral">{meta.source}</span>
+      </div>
+      <h1>{meta.name}</h1>
+      <p class="page-lede">{meta.description}</p>
+    </header>
+
+    <!-- Methodology detail -->
+    <section class="section-block">
+      <h2>Signal construction</h2>
+      <p>{meta.methodology}</p>
+    </section>
+
+    <section class="section-block">
+      <h2>Limitations & caveats</h2>
+      <p>{meta.limitations}</p>
+    </section>
+
+    <!-- Evaluation results table -->
+    <section class="section-block">
+      <h2>Evaluation results</h2>
+      <p class="text-sm text-muted">
+        Rank IC (Spearman) with Newey-West standard errors, walk-forward with 21-day embargo.
+        Multiple-testing correction: Benjamini-Hochberg at q=0.05 across all signal × horizon × cohort tests.
+      </p>
+
+      {!hasResults ? (
+        <div class="notice" style="margin-top: var(--space-6);">
+          <strong>No results yet.</strong> Data collection is ongoing. Results appear once
+          sufficient out-of-sample history has accumulated. See the
+          <a href="/methodology#power">power analysis</a> for timeline estimates.
+        </div>
+      ) : (
+        <div>
+          <div class="table-scroll" style="margin-top: var(--space-6);">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Horizon</th>
+                  <th>Cohort</th>
+                  <th title="Mean rank IC (Spearman) over walk-forward dates">IC mean</th>
+                  <th title="IC standard deviation">IC std</th>
+                  <th title="t-statistic with Newey-West correction">t-stat</th>
+                  <th title="Two-sided p-value">p-value</th>
+                  <th title="BH-corrected reject at q=0.05">BH sig.</th>
+                  <th title="Q5 − Q1 quintile spread (annualized)">Q spread</th>
+                  <th title="Fraction of predictions in correct direction">Hit rate</th>
+                  <th>N obs</th>
+                  <th>N dates</th>
+                </tr>
+              </thead>
+              <tbody>
+                {horizons.flatMap((h) =>
+                  cohorts.map((c) => {
+                    const r = getResult(h, c);
+                    if (!r) return null;
+                    return (
+                      <tr>
+                        <td class="text-mono">{h}d</td>
+                        <td><span class="badge badge-neutral">{c}</span></td>
+                        <td class={`text-mono ${r.ic_mean > 0 ? "text-pos" : "text-neg"}`}>
+                          {formatNumber(r.ic_mean)}
+                        </td>
+                        <td class="text-mono text-muted">{formatNumber(r.ic_std)}</td>
+                        <td class="text-mono">{formatNumber(r.ic_tstat, 2)}</td>
+                        <td class="text-mono text-muted">{formatNumber(r.ic_pvalue, 3)}</td>
+                        <td>
+                          {r.ic_bh_reject
+                            ? <span class="badge badge-pos">Yes</span>
+                            : <span class="badge badge-neutral">No</span>}
+                        </td>
+                        <td class={`text-mono ${r.quintile_spread > 0 ? "text-pos" : "text-neg"}`}>
+                          {formatPct(r.quintile_spread)}
+                        </td>
+                        <td class="text-mono">{formatPct(r.hit_rate)}</td>
+                        <td class="text-mono text-muted">{r.n_obs.toLocaleString()}</td>
+                        <td class="text-mono text-muted">{r.n_dates}</td>
+                      </tr>
+                    );
+                  }).filter(Boolean)
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p class="chart-caption">
+            IC = rank information coefficient (Spearman correlation between predicted rank and realized return rank).
+            Walk-forward with 21-day embargo. BH correction at q=0.05 over all tests in the study.
+          </p>
+        </div>
+      )}
+    </section>
+
+    <!-- IC time series placeholder — populated client-side from JSON -->
+    {hasResults && (
+      <section class="section-block">
+        <h2>Rolling IC over time</h2>
+        <p class="text-sm text-muted">5-day horizon, S&P 500 cohort. 60-day rolling window.</p>
+        <div id="ic-chart" class="chart-wrap chart-placeholder" aria-label="IC time series chart">
+          <noscript>Enable JavaScript to view the interactive chart.</noscript>
+        </div>
+        <p class="chart-caption">
+          Rolling Spearman IC at 5-day horizon. Positive values indicate the signal ranked higher stocks
+          that subsequently outperformed. Shaded band = ±1 Newey-West standard error.
+        </p>
+      </section>
+    )}
+
+    <section class="section-block">
+      <h2>Data coverage</h2>
+      <div id="coverage-stats" class="coverage-grid">
+        <div class="card">
+          <div class="stat-label">S&P 500 names</div>
+          <div class="stat-value" id="sp500-coverage">—</div>
+          <div class="stat-caption">with ≥1 observation</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Retail basket</div>
+          <div class="stat-value" id="retail-coverage">—</div>
+          <div class="stat-caption">with ≥1 observation</div>
+        </div>
+        <div class="card">
+          <div class="stat-label">Days collected</div>
+          <div class="stat-value" id="days-collected">—</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="page-nav">
+      <a href="/signals" class="back-link">← All signals</a>
+      <a href="/methodology#preregistration" class="back-link">Pre-registration →</a>
+    </div>
+  </div>
+
+  <script define:vars={{ signalKey: meta.key }}>
+    // Load IC series from eval_results.json for client-side chart
+    fetch("/data/eval_results.json")
+      .then((r) => r.json())
+      .catch(() => ({ results: [] }))
+      .then((data) => {
+        const result = data.results?.find(
+          (r) => r.feature === signalKey && r.horizon_days === 5 && r.cohort === "sp500"
+        );
+        if (!result?.ic_series?.length) return;
+
+        const chartEl = document.getElementById("ic-chart");
+        if (!chartEl) return;
+
+        // Build simple SVG bar chart without a framework dependency in this block
+        const series = result.ic_series;
+        const n = series.length;
+        const w = Math.min(chartEl.clientWidth || 700, 900);
+        const h = 200;
+        const pad = { top: 20, right: 20, bottom: 40, left: 50 };
+        const plotW = w - pad.left - pad.right;
+        const plotH = h - pad.top - pad.bottom;
+
+        const values = series.map((d) => d.ic);
+        const minV = Math.min(...values, -0.05);
+        const maxV = Math.max(...values,  0.05);
+        const range = maxV - minV || 0.1;
+
+        const xScale = (i) => pad.left + (i / (n - 1)) * plotW;
+        const yScale = (v) => pad.top + (1 - (v - minV) / range) * plotH;
+
+        const points = series.map((d, i) => `${xScale(i)},${yScale(d.ic)}`).join(" ");
+        const zeroY = yScale(0);
+
+        // Axis ticks
+        const yTicks = [-0.1, -0.05, 0, 0.05, 0.1].filter((v) => v >= minV - 0.01 && v <= maxV + 0.01);
+        const xTickEvery = Math.max(1, Math.floor(n / 6));
+
+        const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="IC time series">
+          <title>Rolling IC over time for ${signalKey}</title>
+          <!-- Zero line -->
+          <line x1="${pad.left}" y1="${zeroY}" x2="${w - pad.right}" y2="${zeroY}"
+            stroke="var(--color-border)" stroke-width="1" stroke-dasharray="4,4"/>
+          <!-- Area fill -->
+          <polygon
+            points="${pad.left},${zeroY} ${points} ${w - pad.right},${zeroY}"
+            fill="var(--color-pos-bg)" opacity="0.5"/>
+          <!-- Line -->
+          <polyline points="${points}" fill="none"
+            stroke="var(--color-pos)" stroke-width="1.5" stroke-linejoin="round"/>
+          <!-- Y axis labels -->
+          ${yTicks.map((v) => `
+            <text x="${pad.left - 6}" y="${yScale(v) + 4}" text-anchor="end"
+              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">${v.toFixed(2)}</text>
+            <line x1="${pad.left - 3}" y1="${yScale(v)}" x2="${pad.left}" y2="${yScale(v)}"
+              stroke="var(--color-border)" stroke-width="1"/>
+          `).join("")}
+          <!-- X axis labels -->
+          ${series.filter((_, i) => i % xTickEvery === 0).map((d, idx) => {
+            const i = idx * xTickEvery;
+            const label = d.date.slice(0, 7);
+            return `<text x="${xScale(i)}" y="${h - 8}" text-anchor="middle"
+              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">${label}</text>`;
+          }).join("")}
+        </svg>`;
+
+        chartEl.innerHTML = svg;
+        chartEl.classList.remove("chart-placeholder");
+      });
+
+    // Coverage stats
+    fetch("/data/signals_summary.json")
+      .then((r) => r.json())
+      .catch(() => ({ signals: [] }))
+      .then((data) => {
+        const sig = data.signals?.find((s) => s.key === signalKey);
+        if (!sig) return;
+        const sp500El = document.getElementById("sp500-coverage");
+        const retailEl = document.getElementById("retail-coverage");
+        const daysEl = document.getElementById("days-collected");
+        if (sp500El) sp500El.textContent = sig.sp500_coverage != null ? `${(sig.sp500_coverage * 100).toFixed(0)}%` : "—";
+        if (retailEl) retailEl.textContent = sig.retail_coverage != null ? `${(sig.retail_coverage * 100).toFixed(0)}%` : "—";
+        if (daysEl) daysEl.textContent = sig.n_dates?.toLocaleString() ?? "—";
+      });
+  </script>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); max-width: 54rem; }
+
+  .breadcrumb {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-6);
+  }
+
+  .breadcrumb a { color: var(--color-text-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--color-text); }
+
+  .page-header { margin-bottom: var(--space-10); }
+
+  .signal-badges {
+    display: flex;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  .section-block {
+    margin-bottom: var(--space-12);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+  }
+
+  .section-block h2 { margin-bottom: var(--space-4); }
+  .section-block p + p { margin-top: var(--space-4); }
+
+  .table-scroll { overflow-x: auto; }
+
+  .coverage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-6);
+  }
+
+  .chart-placeholder {
+    min-height: 200px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+    font-size: var(--text-sm);
+  }
+
+  .page-nav {
+    display: flex;
+    justify-content: space-between;
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .back-link {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .back-link:hover { color: var(--color-text); }
+</style>

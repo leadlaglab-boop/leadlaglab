@@ -1,0 +1,318 @@
+---
+import Base from "@/layouts/Base.astro";
+import {
+  loadManifest, loadUniverse, loadSignalSummary, loadEvalResults,
+  loadPredictionLedger, formatDate, formatPct, formatNumber,
+  type SignalMeta, type EvalResults,
+} from "@/lib/data";
+
+const manifest = loadManifest();
+const universe = loadUniverse();
+const signalSummary = loadSignalSummary();
+const evalResults = loadEvalResults();
+const ledger = loadPredictionLedger();
+
+const asOf = manifest.built_at ? formatDate(manifest.built_at) : null;
+
+// Scoreboard: signals with BH-significant IC
+const significant = evalResults.results.filter((r) => r.ic_bh_reject);
+const totalTests = evalResults.results.length;
+const pendingPredictions = ledger.predictions.filter((p) => p.realized_excess_return == null).length;
+const scoredPredictions  = ledger.predictions.filter((p) => p.realized_excess_return != null);
+const hitRate = scoredPredictions.length > 0
+  ? scoredPredictions.filter((p) => p.correct).length / scoredPredictions.length
+  : null;
+
+// Top 3 IC signals by |ic_mean| (horizon=5)
+const topSignals = evalResults.results
+  .filter((r) => r.horizon_days === 5)
+  .sort((a, b) => Math.abs(b.ic_mean) - Math.abs(a.ic_mean))
+  .slice(0, 3);
+
+const hasData = universe.securities.length > 0;
+const hasEval = evalResults.results.length > 0;
+---
+
+<Base title="Lead/Lag Lab" description="Open research: does alternative data predict stock returns? Live predictions, honest evaluation, null results included.">
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-content">
+        <p class="hero-eyebrow text-mono text-xs uppercase">Research in progress</p>
+        <h1>Does alternative data<br>lead stock returns?</h1>
+        <p class="hero-lede">
+          Wikipedia pageviews, GDELT news tone, Google Trends, and SEC filings — tracked daily across the S&P 500 and a retail-attention basket.
+          Rigorously tested, honestly reported. Null results included.
+        </p>
+        {asOf && (
+          <p class="hero-meta text-muted text-sm">
+            Data through <strong>{asOf}</strong> ·
+            {universe.sp500_count} S&P 500 names ·
+            {universe.retail_attention_count} retail-attention names
+          </p>
+        )}
+      </div>
+    </div>
+  </section>
+
+  <!-- Live scoreboard -->
+  <section class="section">
+    <div class="container">
+      <h2 class="section-label">Live scoreboard</h2>
+
+      {!hasEval ? (
+        <div class="notice">
+          <strong>Accumulating history.</strong> Evaluation requires sufficient out-of-sample data.
+          The pipeline has been running since {asOf ?? "recently"}.
+          Results will appear here once there is enough data to compute reliable statistics.
+          See the <a href="/methodology#power">power analysis</a> for the estimated timeline.
+        </div>
+      ) : (
+        <div class="scoreboard">
+          <div class="scorecard-grid">
+            <div class="card stat-card">
+              <div class="stat-label">Signals tested</div>
+              <div class="stat-value">{totalTests}</div>
+              <div class="stat-caption">across {evalResults.results.filter((r,i,a) => a.findIndex(x=>x.horizon_days===r.horizon_days && x.cohort===r.cohort && x.feature===r.feature)===i).length} feature × horizon × cohort combinations</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label">BH-significant (q=0.05)</div>
+              <div class={`stat-value ${significant.length > 0 ? "text-pos" : "text-muted"}`}>
+                {significant.length}
+              </div>
+              <div class="stat-caption">after multiple-testing correction</div>
+            </div>
+            <div class="card stat-card">
+              <div class="stat-label">Predictions scored</div>
+              <div class="stat-value">{scoredPredictions.length}</div>
+              <div class="stat-caption">{pendingPredictions} pending</div>
+            </div>
+            {hitRate !== null && (
+              <div class="card stat-card">
+                <div class="stat-label">Direction hit rate</div>
+                <div class={`stat-value ${hitRate > 0.5 ? "text-pos" : "text-neg"}`}>
+                  {formatPct(hitRate, 0)}
+                </div>
+                <div class="stat-caption">vs 50% random baseline</div>
+              </div>
+            )}
+          </div>
+
+          {topSignals.length > 0 && (
+            <div class="top-signals">
+              <h3 class="subsection-label">Strongest signals at 5-day horizon</h3>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Signal</th>
+                    <th>Cohort</th>
+                    <th title="Spearman IC, mean over walk-forward dates">IC</th>
+                    <th title="t-statistic (Newey-West)">t-stat</th>
+                    <th title="Quintile long-short spread">Q spread</th>
+                    <th>BH reject</th>
+                    <th>Obs.</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topSignals.map((r) => (
+                    <tr>
+                      <td>
+                        <a href={`/signals/${r.feature.replace(/_/g, "-")}`} class="signal-link">
+                          {r.feature.replace(/_/g, " ")}
+                        </a>
+                      </td>
+                      <td><span class="badge badge-neutral">{r.cohort}</span></td>
+                      <td class={`text-mono ${r.ic_mean > 0 ? "text-pos" : "text-neg"}`}>
+                        {formatNumber(r.ic_mean)}
+                      </td>
+                      <td class="text-mono">{formatNumber(r.ic_tstat)}</td>
+                      <td class={`text-mono ${r.quintile_spread > 0 ? "text-pos" : "text-neg"}`}>
+                        {formatPct(r.quintile_spread)}
+                      </td>
+                      <td>
+                        {r.ic_bh_reject
+                          ? <span class="badge badge-pos">Yes</span>
+                          : <span class="badge badge-neutral">No</span>}
+                      </td>
+                      <td class="text-mono text-muted">{r.n_obs.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <p class="chart-caption">IC = rank information coefficient (Spearman). BH correction at q=0.05. Horizons: 1, 5, 21 days.</p>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  </section>
+
+  <!-- Signal families overview -->
+  <section class="section bg-subtle">
+    <div class="container">
+      <h2 class="section-label">Signal families</h2>
+      <div class="grid-2">
+        {[
+          {
+            key: "wiki", name: "Wikipedia Pageviews", icon: "◈",
+            desc: "Abnormal attention spikes in Wikipedia article views for S&P 500 companies. Source: Wikimedia REST API (official, free).",
+            href: "/signals/wiki-pageviews",
+          },
+          {
+            key: "gdelt", name: "GDELT News Tone", icon: "◉",
+            desc: "Daily news tone and volume from the GDELT Project's Global Knowledge Graph. Scored with FinBERT and VADER.",
+            href: "/signals/gdelt-news-tone",
+          },
+          {
+            key: "trends", name: "Google Trends", icon: "◎",
+            desc: "Search interest index, normalized relative to an anchor term. Cached with care given sampling noise.",
+            href: "/signals/google-trends",
+          },
+          {
+            key: "edgar", name: "SEC Filings", icon: "◇",
+            desc: "Insider transactions (Form 4), 8-K counts, and 13F position changes. Clean observed_at from EDGAR acceptance timestamps.",
+            href: "/signals/sec-filings",
+          },
+        ].map((f) => (
+          <a href={f.href} class="card signal-card">
+            <div class="signal-card-icon">{f.icon}</div>
+            <div>
+              <h3 class="signal-card-name">{f.name}</h3>
+              <p class="text-sm text-muted">{f.desc}</p>
+            </div>
+            {signalSummary.signals.find((s) => s.key.startsWith(f.key)) && (
+              <div class="signal-card-meta text-xs text-mono text-faint">
+                {signalSummary.signals.find((s) => s.key.startsWith(f.key))?.n_dates ?? 0} dates collected
+              </div>
+            )}
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Design principles / disclaimer strip -->
+  <section class="section">
+    <div class="container">
+      <div class="principles-grid">
+        {[
+          { label: "No look-ahead", body: "Every record stores when we observed it and what period it describes. Features for date t may only use data before the t decision time." },
+          { label: "Pre-registered", body: "Hypotheses, signal definitions, evaluation metrics, and failure criteria were committed before any evaluation code ran on real data." },
+          { label: "Failure shown honestly", body: "Null results appear on their signal pages. A signal that doesn't work says so. The baseline always appears alongside." },
+          { label: "Prediction ledger is immutable", body: "Each day's predictions are written and committed before outcomes are known, with model version and data hash. No history rewriting." },
+        ].map((p) => (
+          <div class="principle">
+            <div class="principle-label text-xs text-mono uppercase text-accent">{p.label}</div>
+            <p class="text-sm text-muted">{p.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  /* Hero */
+  .hero {
+    padding-block: clamp(var(--space-12), 8vw, var(--space-24));
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .hero-content { max-width: 44rem; }
+
+  .hero-eyebrow {
+    color: var(--color-accent);
+    margin-bottom: var(--space-4);
+  }
+
+  .hero h1 {
+    font-size: clamp(var(--text-3xl), 5vw, var(--text-5xl));
+    line-height: 1.1;
+    margin-bottom: var(--space-6);
+  }
+
+  .hero-lede {
+    font-size: var(--text-lg);
+    line-height: 1.7;
+    color: var(--color-text-muted);
+    max-width: 42ch;
+    margin-bottom: var(--space-6);
+  }
+
+  .hero-meta { margin-top: var(--space-4); }
+
+  /* Sections */
+  .section { padding-block: var(--space-16); }
+  .bg-subtle { background: var(--color-bg-subtle); }
+
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-6);
+    font-weight: 500;
+  }
+
+  .subsection-label {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-4);
+    margin-top: var(--space-8);
+  }
+
+  /* Scoreboard */
+  .scorecard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+  }
+
+  .stat-card { padding: var(--space-6); }
+
+  /* Signal cards */
+  .signal-card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    text-decoration: none;
+    color: var(--color-text);
+    transition: box-shadow var(--transition), border-color var(--transition);
+  }
+
+  .signal-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-text-muted);
+  }
+
+  .signal-card-icon {
+    font-size: var(--text-2xl);
+    color: var(--color-accent);
+    line-height: 1;
+  }
+
+  .signal-card-name {
+    font-size: var(--text-lg);
+    margin-bottom: var(--space-1);
+  }
+
+  .signal-card-meta { margin-top: auto; }
+
+  /* Principles grid */
+  .principles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: var(--space-8);
+  }
+
+  .principle { display: flex; flex-direction: column; gap: var(--space-2); }
+  .principle-label { margin-bottom: var(--space-1); }
+  .principle p { max-width: none; }
+
+  .signal-link { text-decoration: none; color: var(--color-accent); }
+  .signal-link:hover { text-decoration: underline; }
+</style>

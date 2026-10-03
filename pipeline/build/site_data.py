@@ -365,6 +365,271 @@ def build_ledger_json(
     return out
 
 
+def build_eval_results_json(
+    data_repo_path: Path,
+    site_data_path: Path,
+) -> dict[str, Any]:
+    """
+    Generate eval_results.json — per-(feature, horizon_days, cohort) IC summary
+    with embedded ic_series, in the schema data.ts expects.
+    """
+    results_df = load_eval_results(data_repo_path)
+    ic_df = load_ic_series(data_repo_path)
+    quintile_df = load_quintile_returns(data_repo_path)
+
+    empty_out: dict[str, Any] = {
+        "as_of": date.today().isoformat(),
+        "run_id": "",
+        "results": [],
+    }
+
+    if results_df.empty:
+        path = site_data_path / "eval_results.json"
+        path.write_text(json.dumps(empty_out, indent=2))
+        return empty_out
+
+    # Build ic_series lookup: (feature, cohort, horizon) -> [{date, ic}]
+    ic_lookup: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
+    if not ic_df.empty:
+        for (feature, cohort, horizon), grp in ic_df.groupby(["feature", "cohort", "horizon"]):
+            ic_lookup[(str(feature), str(cohort), int(horizon))] = [
+                {"date": str(row["date"]), "ic": _safe_float(row["ic"])}
+                for _, row in grp.sort_values("date").iterrows()
+            ]
+
+    # Build quintile_spread lookup: (feature, cohort, horizon) -> spread
+    q_lookup: dict[tuple[str, str, int], float | None] = {}
+    if not quintile_df.empty:
+        for (feature, cohort, horizon), grp in quintile_df.groupby(
+            ["feature", "cohort", "horizon"]
+        ):
+            q5 = (
+                grp[grp["quintile"] == 5]["mean_excess_return"].iloc[0]
+                if len(grp[grp["quintile"] == 5])
+                else None
+            )
+            q1 = (
+                grp[grp["quintile"] == 1]["mean_excess_return"].iloc[0]
+                if len(grp[grp["quintile"] == 1])
+                else None
+            )
+            if q5 is not None and q1 is not None:
+                q_lookup[(str(feature), str(cohort), int(horizon))] = _safe_float(
+                    float(q5) - float(q1)
+                )
+
+    # Pivot: one row per (feature, horizon, cohort) with IC + FMB stats
+    ic_rows = results_df[(results_df["metric"] == "ic") & (results_df["eval_type"] == "oos")].copy()
+
+    records = []
+    for _, row in ic_rows.iterrows():
+        feature = str(row["feature"])
+        cohort = str(row["cohort"])
+        horizon = int(row["horizon"])
+        key = (feature, cohort, horizon)
+
+        # Compute n_obs = n_periods * approx securities per period (use n_periods as proxy)
+        n_dates = int(row["n_periods"]) if pd.notna(row.get("n_periods")) else 0
+
+        rec: dict[str, Any] = {
+            "feature": feature,
+            "horizon_days": horizon,
+            "cohort": cohort,
+            "ic_mean": _safe_float(row.get("value")),
+            "ic_std": None,  # not stored separately; could be derived from t_stat + n
+            "ic_tstat": _safe_float(row.get("t_stat")),
+            "ic_pvalue": _safe_float(row.get("p_value_bh")),
+            "ic_bh_reject": bool(row["significant_bh"])
+            if pd.notna(row.get("significant_bh"))
+            else False,
+            "quintile_spread": q_lookup.get(key),
+            "hit_rate": None,  # computed separately if available
+            "n_obs": n_dates,  # best proxy without security-level count
+            "n_dates": n_dates,
+            "ic_series": ic_lookup.get(key, []),
+        }
+        records.append(rec)
+
+    # Pull run_id from evaluation manifest if it exists
+    eval_manifest_path = data_repo_path / "processed" / "evaluation" / "manifest.json"
+    run_id = ""
+    if eval_manifest_path.exists():
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            run_id = json.loads(eval_manifest_path.read_text()).get("run_id", "")
+
+    out: dict[str, Any] = {
+        "as_of": date.today().isoformat(),
+        "run_id": run_id,
+        "results": records,
+    }
+    path = site_data_path / "eval_results.json"
+    path.write_text(json.dumps(out, indent=2, default=str))
+    log.info("wrote eval_results.json", path=str(path), records=len(records))
+    return out
+
+
+def build_predictions_json(
+    data_repo_path: Path,
+    site_data_path: Path,
+    max_rows: int = 5000,
+) -> dict[str, Any]:
+    """
+    Generate predictions.json — ledger + outcomes for the Predictions Ledger page.
+    Schema matches data.ts Prediction type.
+    """
+    df = load_scored_ledger(data_repo_path)
+
+    empty_out: dict[str, Any] = {
+        "as_of": date.today().isoformat(),
+        "predictions": [],
+    }
+    if df.empty:
+        path = site_data_path / "predictions.json"
+        path.write_text(json.dumps(empty_out, indent=2))
+        return empty_out
+
+    # Load security master to join ticker
+    try:
+        from pipeline.universe.security_master import load_security_master
+
+        sm = load_security_master(data_repo_path)
+        sid_to_ticker = sm.set_index("security_id")["ticker"].to_dict()
+    except Exception:
+        sid_to_ticker = {}
+
+    records = []
+    df_sorted = df.sort_values("made_at", ascending=False).head(max_rows)
+
+    for _, row in df_sorted.iterrows():
+        security_id = str(row.get("security_id", ""))
+        realized = _safe_float(row.get("realized_excess_return"))
+        predicted = _safe_float(row.get("predicted_excess_return"))
+
+        # Derive direction + correctness
+        pred_dir = row.get("predicted_direction")
+        if isinstance(pred_dir, int | np.integer):
+            direction = "up" if int(pred_dir) == 1 else "down"
+        else:
+            direction = str(pred_dir) if pred_dir else "up"
+
+        correct: bool | None = None
+        if realized is not None and predicted is not None:
+            correct = (realized > 0) == (predicted > 0)
+
+        ci_lower = _safe_float(row.get("ci_lower"))
+        ci_upper = _safe_float(row.get("ci_upper"))
+
+        rec: dict[str, Any] = {
+            "prediction_id": str(row.get("prediction_id", "")),
+            "made_at": row["made_at"].isoformat()
+            if hasattr(row.get("made_at"), "isoformat")
+            else str(row.get("made_at", "")),
+            "security_id": security_id,
+            "ticker": sid_to_ticker.get(security_id, security_id),
+            "target_date_start": row["target_date_start"].isoformat()
+            if hasattr(row.get("target_date_start"), "isoformat")
+            else str(row.get("target_date_start", "")),
+            "target_date_end": row["target_date_end"].isoformat()
+            if hasattr(row.get("target_date_end"), "isoformat")
+            else str(row.get("target_date_end", "")),
+            "horizon_days": int(row.get("horizon_days", 0)),
+            "model_id": str(row.get("model_id", "")),
+            "predicted_direction": direction,
+            "predicted_excess_return": predicted,
+            "confidence_interval": [ci_lower, ci_upper],
+            "realized_excess_return": realized,
+            "scored_at": row["scored_at"].isoformat()
+            if hasattr(row.get("scored_at"), "isoformat")
+            else None,
+            "correct": correct,
+        }
+        records.append(rec)
+
+    out: dict[str, Any] = {
+        "as_of": date.today().isoformat(),
+        "predictions": records,
+    }
+    path = site_data_path / "predictions.json"
+    path.write_text(json.dumps(out, indent=2, default=str))
+    log.info("wrote predictions.json", path=str(path), records=len(records))
+    return out
+
+
+def build_pipeline_status_json(
+    data_repo_path: Path,
+    site_data_path: Path,
+) -> dict[str, Any]:
+    """
+    Generate pipeline_status.json — per-source health and recent run log.
+    Reads from {data_repo}/processed/pipeline_runs/ if it exists.
+    Falls back to an "unknown" status if no runs have been recorded.
+    """
+    runs_dir = data_repo_path / "processed" / "pipeline_runs"
+
+    sources = ["wikipedia", "edgar", "gdelt", "trends", "prices"]
+    source_statuses = []
+    overall = "ok"
+
+    for source in sources:
+        source_log = runs_dir / f"{source}_status.json" if runs_dir.exists() else None
+        if source_log and source_log.exists():
+            try:
+                s = json.loads(source_log.read_text())
+                source_statuses.append(s)
+                if s.get("status") == "error":
+                    overall = "error"
+                elif s.get("status") == "stale" and overall != "error":
+                    overall = "degraded"
+            except Exception:
+                source_statuses.append(
+                    {
+                        "source": source,
+                        "last_success": None,
+                        "last_attempt": None,
+                        "status": "error",
+                        "records_today": 0,
+                        "error_message": "could not read status file",
+                    }
+                )
+        else:
+            source_statuses.append(
+                {
+                    "source": source,
+                    "last_success": None,
+                    "last_attempt": None,
+                    "status": "never",
+                    "records_today": 0,
+                    "error_message": None,
+                }
+            )
+            if overall == "ok":
+                overall = "degraded"
+
+    # Recent runs log
+    recent_runs = []
+    run_log_path = runs_dir / "runs.jsonl" if runs_dir.exists() else None
+    if run_log_path and run_log_path.exists():
+        try:
+            lines = run_log_path.read_text().strip().splitlines()
+            for line in reversed(lines[-20:]):
+                recent_runs.append(json.loads(line))
+        except Exception:
+            pass
+
+    out: dict[str, Any] = {
+        "as_of": datetime.now(tz=UTC).isoformat(),
+        "overall_status": overall,
+        "sources": source_statuses,
+        "recent_runs": recent_runs,
+    }
+    path = site_data_path / "pipeline_status.json"
+    path.write_text(json.dumps(out, indent=2, default=str))
+    log.info("wrote pipeline_status.json", path=str(path), overall=overall)
+    return out
+
+
 def build_all(
     data_repo_path: Path,
     site_data_path: Path,
@@ -376,6 +641,9 @@ def build_all(
     build_signals_summary_json(data_repo_path, site_data_path)
     build_ic_series_json(data_repo_path, site_data_path)
     build_quintile_returns_json(data_repo_path, site_data_path)
-    build_ledger_json(data_repo_path, site_data_path)
+    build_eval_results_json(data_repo_path, site_data_path)
+    build_predictions_json(data_repo_path, site_data_path)
+    build_pipeline_status_json(data_repo_path, site_data_path)
+    build_ledger_json(data_repo_path, site_data_path)  # keep for backwards compat
     build_manifest(site_data_path)
     log.info("site data build complete")

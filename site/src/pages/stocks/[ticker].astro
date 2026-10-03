@@ -1,0 +1,290 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadUniverse, type Security } from "@/lib/data";
+
+export function getStaticPaths() {
+  const universe = loadUniverse();
+  return universe.securities.map((s: Security) => ({
+    params: { ticker: s.ticker.toLowerCase() },
+    props: { security: s },
+  }));
+}
+
+const { security } = Astro.props as { security: Security };
+const ticker = security.ticker;
+---
+
+<Base
+  title={`${ticker} — ${security.name}`}
+  description={`${security.name} (${ticker}): signal ranks, price vs signal history, and prediction ledger. Lead/Lag Lab alt-data study.`}
+>
+  <div class="container page-container">
+    <nav class="breadcrumb" aria-label="Breadcrumb">
+      <a href="/stocks">Stocks</a>
+      <span aria-hidden="true"> / </span>
+      <span aria-current="page">{ticker}</span>
+    </nav>
+
+    <header class="page-header">
+      <div class="ticker-badge">
+        <span class="ticker-code">{ticker}</span>
+        <span class={`badge ${security.cohort === "retail_attention" ? "badge-accent" : "badge-neutral"}`}>
+          {security.cohort === "retail_attention" ? "Retail attention" : "S&P 500"}
+        </span>
+        <span class="badge badge-neutral">{security.gics_sector}</span>
+      </div>
+      <h1>{security.name}</h1>
+    </header>
+
+    <!-- Signal rank summary — loaded client-side -->
+    <section class="section-block">
+      <h2>Current signal ranks</h2>
+      <p class="text-sm text-muted">
+        Cross-sectional percentile rank within sector. 100 = highest; 50 = median. As of most recent trading day.
+      </p>
+      <div id="signal-ranks" class="ranks-grid">
+        {["wiki_pageviews", "gdelt_news_tone", "google_trends", "sec_filings"].map((key) => (
+          <div class="card rank-card">
+            <div class="stat-label">{key.replace(/_/g, " ")}</div>
+            <div class="rank-value" id={`rank-${key}`}>—</div>
+            <div class="stat-caption" id={`rank-${key}-date`}></div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <!-- Price vs signal chart -->
+    <section class="section-block">
+      <h2>Price history</h2>
+      <p class="text-sm text-muted">Adjusted close (source: Tiingo, derived stats only).</p>
+      <div id="price-chart" class="chart-wrap chart-placeholder" aria-label="Price history chart">
+        <span class="text-muted text-sm">Loading price data…</span>
+        <noscript>Enable JavaScript to view charts.</noscript>
+      </div>
+      <p class="chart-caption">Adjusted close. Not for redistribution per Tiingo terms.</p>
+    </section>
+
+    <!-- Prediction history -->
+    <section class="section-block">
+      <h2>Prediction history</h2>
+      <p class="text-sm text-muted">
+        All frozen predictions made for this ticker before outcomes were known.
+      </p>
+      <div id="predictions-table-wrap">
+        <p class="text-sm text-muted" id="predictions-loading">Loading predictions…</p>
+      </div>
+    </section>
+
+    <div class="page-nav">
+      <a href="/stocks" class="back-link">← All stocks</a>
+      <a href="/ledger" class="back-link">Full ledger →</a>
+    </div>
+  </div>
+
+  <script define:vars={{ securityId: security.security_id, tickerUpper: ticker.toUpperCase() }}>
+    // Load price data
+    fetch("/data/prices_sample.json")
+      .then((r) => r.json())
+      .then((data) => {
+        const series = data.series?.[tickerUpper];
+        const chartEl = document.getElementById("price-chart");
+        if (!chartEl) return;
+
+        if (!series?.length) {
+          chartEl.innerHTML = `<p class="text-sm text-muted" style="padding:var(--space-8)">No price data collected yet for ${tickerUpper}.</p>`;
+          chartEl.classList.remove("chart-placeholder");
+          return;
+        }
+
+        const w = Math.min(chartEl.clientWidth || 700, 900);
+        const h = 180;
+        const pad = { top: 16, right: 20, bottom: 36, left: 60 };
+        const plotW = w - pad.left - pad.right;
+        const plotH = h - pad.top - pad.bottom;
+
+        const prices = series.map((d) => d.adj_close);
+        const minP = Math.min(...prices);
+        const maxP = Math.max(...prices);
+        const rangeP = maxP - minP || 1;
+
+        const xScale = (i) => pad.left + (i / (prices.length - 1)) * plotW;
+        const yScale = (v) => pad.top + (1 - (v - minP) / rangeP) * plotH;
+
+        const linePoints = series.map((d, i) => `${xScale(i)},${yScale(d.adj_close)}`).join(" ");
+        const areaPoints = `${pad.left},${h - pad.bottom} ${linePoints} ${w - pad.right},${h - pad.bottom}`;
+
+        const xTickEvery = Math.max(1, Math.floor(series.length / 5));
+        const yTicks = 4;
+        const yTickValues = Array.from({ length: yTicks + 1 }, (_, i) =>
+          minP + (i / yTicks) * rangeP
+        );
+
+        const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Price history for ${tickerUpper}">
+          <title>Adjusted close price for ${tickerUpper}</title>
+          <polygon points="${areaPoints}" fill="var(--color-accent-bg)" opacity="0.6"/>
+          <polyline points="${linePoints}" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-linejoin="round"/>
+          ${yTickValues.map((v) => `
+            <text x="${pad.left - 6}" y="${yScale(v) + 4}" text-anchor="end"
+              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">$${v.toFixed(0)}</text>
+            <line x1="${pad.left}" y1="${yScale(v)}" x2="${w - pad.right}" y2="${yScale(v)}"
+              stroke="var(--color-border)" stroke-width="0.5" stroke-dasharray="3,3"/>
+          `).join("")}
+          ${series.filter((_, i) => i % xTickEvery === 0).map((d, idx) => {
+            const i = idx * xTickEvery;
+            return `<text x="${xScale(i)}" y="${h - 8}" text-anchor="middle"
+              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">${d.date?.slice(0, 7) ?? ""}</text>`;
+          }).join("")}
+        </svg>`;
+
+        chartEl.innerHTML = svg;
+        chartEl.classList.remove("chart-placeholder");
+      })
+      .catch(() => {
+        const el = document.getElementById("price-chart");
+        if (el) el.innerHTML = `<p class="text-sm text-muted" style="padding:var(--space-4)">Price data unavailable.</p>`;
+      });
+
+    // Load predictions for this ticker
+    fetch("/data/predictions.json")
+      .then((r) => r.json())
+      .catch(() => ({ predictions: [] }))
+      .then((data) => {
+        const wrap = document.getElementById("predictions-table-wrap");
+        if (!wrap) return;
+
+        const preds = (data.predictions || []).filter((p) => p.security_id === securityId);
+        if (!preds.length) {
+          wrap.innerHTML = `<p class="text-sm text-muted">No predictions yet for ${tickerUpper}.</p>`;
+          return;
+        }
+
+        const rows = preds.map((p) => {
+          const dir = p.predicted_direction === "up"
+            ? `<span class="badge badge-pos">↑ Up</span>`
+            : `<span class="badge badge-neg">↓ Down</span>`;
+          const outcome = p.realized_excess_return != null
+            ? (p.correct
+              ? `<span class="text-pos">✓ ${(p.realized_excess_return * 100).toFixed(2)}%</span>`
+              : `<span class="text-neg">✗ ${(p.realized_excess_return * 100).toFixed(2)}%</span>`)
+            : `<span class="text-muted">Pending</span>`;
+
+          return `<tr>
+            <td class="text-mono text-xs">${p.made_at?.slice(0, 10) ?? "—"}</td>
+            <td class="text-mono">${p.horizon_days}d</td>
+            <td>${dir}</td>
+            <td class="text-mono">${(p.predicted_excess_return * 100).toFixed(2)}%</td>
+            <td>${outcome}</td>
+            <td class="text-mono text-xs text-muted">${p.model_id ?? "—"}</td>
+          </tr>`;
+        }).join("");
+
+        wrap.innerHTML = `
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Made at</th>
+                  <th>Horizon</th>
+                  <th>Direction</th>
+                  <th>Predicted excess</th>
+                  <th>Outcome</th>
+                  <th>Model</th>
+                </tr>
+              </thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <p class="chart-caption">Predictions made before outcomes were known. Each row has a frozen model version and data hash.</p>
+        `;
+      });
+  </script>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); max-width: 54rem; }
+
+  .breadcrumb {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-6);
+  }
+
+  .breadcrumb a { color: var(--color-text-muted); text-decoration: none; }
+  .breadcrumb a:hover { color: var(--color-text); }
+
+  .page-header { margin-bottom: var(--space-8); }
+
+  .ticker-badge {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .ticker-code {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--color-accent);
+    letter-spacing: 0.02em;
+  }
+
+  .page-header h1 { font-size: var(--text-3xl); }
+
+  .section-block {
+    margin-bottom: var(--space-12);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+  }
+
+  .section-block h2 { margin-bottom: var(--space-4); }
+
+  .ranks-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+  }
+
+  .rank-card { padding: var(--space-4); }
+
+  .rank-value {
+    font-family: var(--font-mono);
+    font-size: var(--text-2xl);
+    font-weight: 400;
+    font-feature-settings: "tnum" 1;
+    color: var(--color-text);
+    line-height: 1.2;
+    margin-block: var(--space-1);
+  }
+
+  .chart-placeholder {
+    min-height: 180px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  .page-nav {
+    display: flex;
+    justify-content: space-between;
+    padding-top: var(--space-8);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .back-link {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  .back-link:hover { color: var(--color-text); }
+</style>

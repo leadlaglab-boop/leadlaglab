@@ -1,0 +1,290 @@
+---
+import "../styles/global.css";
+
+export interface Props {
+  title: string;
+  description?: string;
+  ogImage?: string;
+  noIndex?: boolean;
+}
+
+const {
+  title,
+  description = "An open, honest study of alternative data signals and whether they predict stock returns. Research only — not investment advice.",
+  ogImage = "/og-default.png",
+  noIndex = false,
+} = Astro.props;
+
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
+const siteName = "Lead/Lag Lab";
+const fullTitle = title === siteName ? siteName : `${title} — ${siteName}`;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+
+    <title>{fullTitle}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonicalUrl} />
+    {noIndex && <meta name="robots" content="noindex" />}
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={fullTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonicalUrl} />
+    <meta property="og:site_name" content={siteName} />
+    <meta property="og:image" content={new URL(ogImage, Astro.site)} />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Favicon -->
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <!-- Security headers via meta (also set at Cloudflare) -->
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+
+    <!-- Cloudflare Web Analytics injected by Pages settings (no script tag needed here) -->
+
+    <!-- Theme persistence (before body renders to avoid flash) -->
+    <script is:inline>
+      (function () {
+        const saved = localStorage.getItem("theme");
+        const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const theme = saved || (prefersDark ? "dark" : "light");
+        document.documentElement.setAttribute("data-theme", theme);
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Skip to main content</a>
+
+    <header class="site-header">
+      <div class="container">
+        <div class="header-inner">
+          <a href="/" class="site-logo" aria-label="Lead/Lag Lab home">
+            <span class="logo-mark" aria-hidden="true">⟨⟩</span>
+            <span class="logo-text">Lead/Lag Lab</span>
+          </a>
+
+          <nav class="site-nav" aria-label="Primary navigation">
+            <ul role="list">
+              <li><a href="/signals">Signals</a></li>
+              <li><a href="/stocks">Stocks</a></li>
+              <li><a href="/explorer">Explorer</a></li>
+              <li><a href="/ledger">Ledger</a></li>
+              <li><a href="/methodology">Methodology</a></li>
+            </ul>
+          </nav>
+
+          <div class="header-actions">
+            <button
+              id="theme-toggle"
+              aria-label="Toggle light/dark theme"
+              title="Toggle theme"
+              class="icon-btn">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="5"/>
+                <line x1="12" y1="1" x2="12" y2="3"/>
+                <line x1="12" y1="21" x2="12" y2="23"/>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                <line x1="1" y1="12" x2="3" y2="12"/>
+                <line x1="21" y1="12" x2="23" y2="12"/>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" tabindex="-1">
+      <slot />
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-inner">
+          <div class="footer-disclaimer">
+            <strong>Research only, not investment advice.</strong>
+            Lead/Lag Lab is a public, open research project. Nothing here constitutes a recommendation to buy or sell any security. Past signal performance does not predict future results.
+          </div>
+          <nav aria-label="Footer navigation" class="footer-nav">
+            <a href="/methodology">Methodology</a>
+            <a href="/changelog">Status</a>
+            <a href="/about">About</a>
+            <a href="/feed.xml" aria-label="RSS feed">RSS</a>
+          </nav>
+          <div class="footer-meta text-faint text-xs">
+            Data as of <span id="data-as-of">—</span>.
+            Research only. <a href="/about#disclaimer">Full disclaimer.</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      // Theme toggle
+      const btn = document.getElementById("theme-toggle");
+      btn?.addEventListener("click", () => {
+        const current = document.documentElement.getAttribute("data-theme") || "light";
+        const next = current === "dark" ? "light" : "dark";
+        document.documentElement.setAttribute("data-theme", next);
+        localStorage.setItem("theme", next);
+      });
+
+      // Populate data-as-of from manifest
+      fetch("/data/manifest.json")
+        .then((r) => r.json())
+        .then((m) => {
+          const el = document.getElementById("data-as-of");
+          if (el && m.built_at) {
+            const d = new Date(m.built_at);
+            el.textContent = d.toLocaleDateString("en-US", {
+              month: "short", day: "numeric", year: "numeric",
+            });
+          }
+        })
+        .catch(() => {});
+    </script>
+  </body>
+</html>
+
+<style>
+  /* ── Site header ──────────────────────────────────────────────────────── */
+  .site-header {
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-bg);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    height: 3.5rem;
+  }
+
+  .site-logo {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-decoration: none;
+    color: var(--color-text);
+    flex-shrink: 0;
+  }
+
+  .logo-mark {
+    font-family: var(--font-mono);
+    font-size: var(--text-lg);
+    color: var(--color-accent);
+    line-height: 1;
+    user-select: none;
+  }
+
+  .logo-text {
+    font-family: var(--font-serif);
+    font-size: var(--text-lg);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variation-settings: "opsz" 20;
+  }
+
+  .site-nav {
+    flex-grow: 1;
+  }
+
+  .site-nav ul {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    list-style: none;
+  }
+
+  .site-nav a {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-weight: 500;
+    padding-block: var(--space-1);
+    border-bottom: 2px solid transparent;
+    transition: color var(--transition), border-color var(--transition);
+  }
+
+  .site-nav a:hover,
+  .site-nav a[aria-current="page"] {
+    color: var(--color-text);
+    border-bottom-color: var(--color-accent);
+  }
+
+  .icon-btn {
+    background: none;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    transition: color var(--transition), border-color var(--transition);
+  }
+
+  .icon-btn:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+  }
+
+  /* ── Site footer ──────────────────────────────────────────────────────── */
+  .site-footer {
+    margin-top: auto;
+    border-top: 1px solid var(--color-border);
+    padding-block: var(--space-8);
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+  }
+
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .footer-disclaimer {
+    max-width: 60ch;
+    line-height: 1.6;
+  }
+
+  .footer-nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .footer-nav a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+  }
+
+  .footer-nav a:hover { color: var(--color-text); }
+
+  /* Mobile nav */
+  @media (max-width: 48rem) {
+    .site-nav ul { gap: var(--space-4); }
+    .logo-text { display: none; }
+  }
+
+  @media (max-width: 36rem) {
+    .site-nav { display: none; }
+  }
+</style>

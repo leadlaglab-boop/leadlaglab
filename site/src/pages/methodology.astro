@@ -1,0 +1,358 @@
+---
+import Base from "@/layouts/Base.astro";
+---
+
+<Base
+  title="Methodology"
+  description="Lead/Lag Lab methodology: signal construction, evaluation framework, pre-registration, walk-forward validation, multiple-testing correction, and known limitations."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Methodology</h1>
+      <p class="page-lede">
+        How signals are built, how they're evaluated, what was pre-registered,
+        and where the hard limits of this study are.
+      </p>
+    </header>
+
+    <nav class="toc" aria-label="Table of contents">
+      <p class="toc-title text-xs text-mono uppercase">On this page</p>
+      <ul>
+        <li><a href="#preregistration">Pre-registration</a></li>
+        <li><a href="#universe">Universe</a></li>
+        <li><a href="#signal-construction">Signal construction</a></li>
+        <li><a href="#evaluation">Evaluation</a></li>
+        <li><a href="#walk-forward">Walk-forward validation</a></li>
+        <li><a href="#multiple-testing">Multiple-testing correction</a></li>
+        <li><a href="#baselines">Baselines</a></li>
+        <li><a href="#power">Power & timeline</a></li>
+        <li><a href="#failure">Failure criteria</a></li>
+        <li><a href="#amendments">Amendments log</a></li>
+        <li><a href="#data-sources">Data sources</a></li>
+        <li><a href="#limitations">Known limitations</a></li>
+      </ul>
+    </nav>
+
+    <div class="prose">
+      <section id="preregistration">
+        <h2>Pre-registration</h2>
+        <p>
+          Before any evaluation code ran on real data, the full study design was committed
+          to <code>study/PREREGISTRATION.md</code> in git. This file defines:
+          hypotheses, signal definitions, evaluation metrics, the universe, return targets,
+          multiple-testing procedures, and failure criteria.
+        </p>
+        <p>
+          The commit hash that locked the pre-registration is recorded in the amendments log.
+          Any change to the study design after that commit must be documented in
+          <code>study/AMENDMENTS.md</code> with a date and reason.
+          Silent edits to the pre-registration are not permitted.
+        </p>
+        <p>
+          <a href="https://github.com/leadlaglab-boop/leadlaglab/blob/main/study/PREREGISTRATION.md"
+            target="_blank" rel="noopener">
+            Read the pre-registration →
+          </a>
+        </p>
+      </section>
+
+      <section id="universe">
+        <h2>Universe</h2>
+        <p>
+          <strong>S&P 500 core:</strong> Point-in-time membership tracked from Wikipedia's
+          S&P 500 historical changes table. We record each membership change with its effective date.
+          Constituents at date t are those in the index as of close on that date, not today's membership.
+          GICS sector is stored at each date. Limitation: Wikipedia's change table may contain errors
+          and has incomplete history before ~2000.
+        </p>
+        <p>
+          <strong>Retail-attention basket:</strong> A separate, fixed cohort analyzed independently.
+          Inclusion rule: elevated retail attention or short interest as of the study start date.
+          The cohort is defined in <code>config/universe_retail.yaml</code> and was fixed in the pre-registration.
+          Signals that work only in this cohort are noted as such and not generalized to the S&P 500.
+        </p>
+        <p>
+          Ticker changes are handled via a stable internal <code>security_id</code> (SEC CIK where available)
+          mapped to tickers over time. Each ticker's identity is verified before inclusion.
+          Adjustments for splits and dividends use the adjusted close price from the price source;
+          raw close is also retained.
+        </p>
+      </section>
+
+      <section id="signal-construction">
+        <h2>Signal construction</h2>
+        <p>
+          For each signal family and each trading day t, we compute a raw value using only
+          data with <code>observed_at</code> strictly before the 16:00 ET decision cutoff on date t.
+          No future data is ever used.
+        </p>
+        <p>
+          <strong>Step 1 — Time-series z-score:</strong> For each security, compute
+          <em>z = (value_t &minus; mean(value_&#123;t&minus;60,t&minus;1&#125;)) / std(value_&#123;t&minus;60,t&minus;1&#125;)</em>.
+          Securities with fewer than 20 valid observations in the rolling window are excluded.
+        </p>
+        <p>
+          <strong>Step 2 — Cross-sectional rank:</strong> Within each date and GICS sector,
+          rank securities by their z-score and normalize to [0, 1]. This removes sector-level
+          mean reversion and standardizes across signals with different distributions.
+        </p>
+        <p>
+          <strong>Step 3 — Shrinkage:</strong> For signals derived from counts (e.g., insider
+          transactions), apply empirical Bayes shrinkage toward the cross-sectional mean:
+          <em>shrunk = n·raw / (n + κ) + κ·mean_cs / (n + κ)</em>, where κ is the shrinkage
+          parameter chosen by cross-validation on the training set.
+        </p>
+        <p>
+          <strong>Price and momentum are never part of any alt-data signal.</strong>
+          They appear only as controls in Fama-MacBeth regressions and as baselines.
+        </p>
+      </section>
+
+      <section id="evaluation">
+        <h2>Evaluation</h2>
+        <p>
+          The primary evaluation metric is the <strong>rank information coefficient (IC)</strong>:
+          the Spearman rank correlation between the predicted cross-sectional rank of securities
+          (from the signal) and the realized cross-sectional rank of subsequent excess returns.
+        </p>
+        <p>
+          <strong>Return targets</strong> are excess returns vs SPY (market) and vs sector ETF,
+          at horizons of 1, 5, and 21 trading days. We use adjusted close prices and overlapping
+          return windows purged by the embargo (see Walk-forward below).
+        </p>
+        <p>
+          <strong>Statistical significance</strong> is assessed via a two-sided t-test on the
+          time series of daily ICs, with <strong>Newey-West standard errors</strong> to account
+          for autocorrelation from overlapping windows (lag = horizon + 5 trading days).
+        </p>
+        <p>
+          Secondary metrics include: quintile long-short spread (Q5 − Q1 mean excess return),
+          hit rate (fraction of predictions in correct direction), and Fama-MacBeth cross-sectional
+          regressions with controls for size (log market cap), momentum (12-1 month return),
+          volatility (21-day realized vol), and sector fixed effects.
+        </p>
+      </section>
+
+      <section id="walk-forward">
+        <h2>Walk-forward validation</h2>
+        <p>
+          We use a <strong>walk-forward split with embargo</strong> (also called purged k-fold).
+          The training set ends at date t; the evaluation window starts at t + embargo_days,
+          where embargo_days = horizon + 5 trading days. This prevents target leakage from
+          overlapping return windows.
+        </p>
+        <p>
+          We never use random splits, which would allow future data into the training set for
+          time-series problems with overlapping labels.
+        </p>
+        <p>
+          Results labeled <em>backfilled</em> use historical data that was collected after the
+          fact (e.g., Wikipedia pageviews from 2020–2024 fetched in 2026). Results labeled
+          <em>live</em> use data actually collected in real time. These are always reported separately.
+          Backtested results are not presented alongside live results without an explicit label.
+        </p>
+      </section>
+
+      <section id="multiple-testing">
+        <h2>Multiple-testing correction</h2>
+        <p>
+          This study tests multiple signals × horizons × cohorts simultaneously.
+          All tests are listed in the pre-registration. We apply the
+          <strong>Benjamini-Hochberg (BH) procedure</strong> at a false discovery rate of q = 0.05
+          across all tests. A signal is declared "significant" only after passing this correction.
+        </p>
+        <p>
+          The number of trials (N_trials) is counted honestly in the pre-registration.
+          Every test—including null results—is reported. We do not selectively report
+          only significant findings.
+        </p>
+        <p>
+          We also report the pre-correction p-values alongside BH-adjusted decisions,
+          so readers can apply their own correction if desired.
+        </p>
+      </section>
+
+      <section id="baselines">
+        <h2>Baselines</h2>
+        <p>Every signal is compared against at least these baselines:</p>
+        <ul>
+          <li><strong>Zero:</strong> Predict zero excess return for all securities (naive).</li>
+          <li><strong>Momentum:</strong> Past 12-1 month return rank as predictor.</li>
+          <li><strong>AR(p):</strong> Autoregressive model of the signal itself (does the signal predict itself?).</li>
+          <li><strong>Sector mean:</strong> Predict each security earns its sector's average excess return.</li>
+        </ul>
+        <p>
+          A signal must beat its best baseline out-of-sample, after multiple-testing correction,
+          to be considered "working." Improvements over the zero baseline but not momentum
+          are interpreted as capturing a momentum effect, not an independent alt-data signal.
+        </p>
+      </section>
+
+      <section id="power">
+        <h2>Power analysis & timeline</h2>
+        <p>
+          The minimum detectable IC at a given sample size can be estimated from:
+          <em>t = IC × sqrt(N) / sqrt(1 − IC²)</em>.
+          For a two-sided test at α=0.05 after BH correction (adjusted α ≈ 0.05/N_trials),
+          we need IC ≥ 0.03 and N ≥ 500 observations (date-security pairs per test)
+          for 80% power at a typical IC of 0.05.
+        </p>
+        <p>
+          With ~500 S&P 500 securities and daily observations, we accumulate ~500 obs/day.
+          The minimum history needed for stable walk-forward evaluation is approximately
+          <strong>60–90 trading days</strong> (~3 months). With &lt;1 year of live data,
+          no result should be considered conclusive.
+        </p>
+        <div id="power-chart" class="chart-wrap" style="min-height:140px; background:var(--color-bg-subtle); border:1px solid var(--color-border); border-radius:var(--radius-md); display:flex; align-items:center; justify-content:center; color:var(--color-text-faint); font-size:var(--text-sm);">
+          Power curve chart (loads client-side)
+        </div>
+      </section>
+
+      <section id="failure">
+        <h2>Failure criteria</h2>
+        <p>
+          A signal is declared to <strong>have no usable predictive power</strong> if, after
+          accumulating the minimum required history (see Power above), the BH-corrected test
+          fails to reject the null at q=0.05, AND the point estimate of IC is below 0.02
+          for every horizon and cohort.
+        </p>
+        <p>
+          Failure is reported prominently on the signal's page. We do not remove failed
+          signals from the site or from the evaluation framework. The pre-registration
+          defines these criteria; they cannot be changed post-hoc.
+        </p>
+      </section>
+
+      <section id="amendments">
+        <h2>Amendments log</h2>
+        <p>
+          Changes to the study design after the pre-registration commit are documented in
+          <code>study/AMENDMENTS.md</code>. Each entry includes: the date, what changed,
+          why it changed, and whether it was a pre-specified decision rule or a new decision.
+        </p>
+        <p>
+          <a href="https://github.com/leadlaglab-boop/leadlaglab/blob/main/study/AMENDMENTS.md"
+            target="_blank" rel="noopener">
+            View amendments log →
+          </a>
+        </p>
+      </section>
+
+      <section id="data-sources">
+        <h2>Data sources</h2>
+        <p>Full source documentation including terms, what we store, and what we publish:</p>
+        <p>
+          <a href="https://github.com/leadlaglab-boop/leadlaglab/blob/main/docs/DATA_SOURCES.md"
+            target="_blank" rel="noopener">
+            docs/DATA_SOURCES.md →
+          </a>
+        </p>
+        <p>
+          We only ingest sources whose terms permit our use. Sources that prohibit bulk
+          redistribution are used to generate derived statistics only — the raw files are
+          not published. Sources with unclear terms are flagged and skipped by default.
+        </p>
+      </section>
+
+      <section id="limitations">
+        <h2>Known limitations</h2>
+        <ul>
+          <li><strong>Short history:</strong> The live data archive starts October 2026. Backfilled data is labeled separately and treated with appropriate skepticism.</li>
+          <li><strong>Survivorship bias:</strong> The point-in-time S&P 500 membership list mitigates this but is imperfect for older dates.</li>
+          <li><strong>Entity matching:</strong> GDELT and Wikipedia mapping to companies is approximate. Precision is audited quarterly.</li>
+          <li><strong>Transaction costs:</strong> Quintile spreads are gross of transaction costs. A stated TC assumption of 5 bps per leg is applied in sensitivity checks.</li>
+          <li><strong>Market microstructure:</strong> At 1-day horizon, execution timing assumptions strongly affect results.</li>
+          <li><strong>Signal decay:</strong> If this work becomes widely known, any genuine signal will decay as more participants act on it.</li>
+          <li><strong>Sector concentration:</strong> The retail-attention basket is concentrated in technology and consumer discretionary.</li>
+        </ul>
+      </section>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .page-container {
+    padding-block: var(--space-12);
+    display: grid;
+    grid-template-columns: 1fr min(var(--max-prose), 100%);
+    grid-template-areas:
+      "header header"
+      "toc    prose";
+    gap: var(--space-6) var(--space-12);
+    align-items: start;
+  }
+
+  @media (max-width: 56rem) {
+    .page-container {
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "header"
+        "toc"
+        "prose";
+    }
+  }
+
+  .page-header {
+    grid-area: header;
+    max-width: 44rem;
+    margin-bottom: var(--space-4);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  .toc {
+    grid-area: toc;
+    position: sticky;
+    top: calc(3.5rem + var(--space-4));
+    font-size: var(--text-sm);
+    max-width: 14rem;
+    min-width: 10rem;
+  }
+
+  .toc-title { margin-bottom: var(--space-3); }
+
+  .toc ul {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .toc a {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    line-height: 1.4;
+  }
+
+  .toc a:hover { color: var(--color-text); }
+
+  .prose {
+    grid-area: prose;
+    max-width: var(--max-prose);
+  }
+
+  .prose section {
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+    margin-bottom: var(--space-10);
+  }
+
+  .prose section:first-child { border-top: none; padding-top: 0; }
+
+  .prose h2 { margin-bottom: var(--space-4); }
+
+  .prose p { max-width: none; }
+  .prose p + p { margin-top: var(--space-4); }
+
+  .prose ul {
+    margin-top: var(--space-4);
+    padding-left: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .prose li { line-height: 1.7; }
+</style>
