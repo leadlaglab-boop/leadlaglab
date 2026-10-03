@@ -1,0 +1,41 @@
+# Source configuration. See docs/DATA_SOURCES.md for terms, licenses, and notes.
+
+prices:
+  primary: stooq
+  fallback: tiingo
+  last_resort: alpha_vantage   # only if others fail; never for bulk redistribution
+
+gdelt:
+  base_url: "http://data.gdelt.org"
+  gkg_update_interval_minutes: 15
+  lookback_days_backfill: 365
+
+wikipedia_pageviews:
+  api_base: "https://wikimedia.org/api/rest_v1/metrics/pageviews"
+  user_agent: "LeadLagLab/1.0 (leadlaglab@gmail.com)"
+  granularity: daily
+
+edgar:
+  user_agent: "LeadLagLab leadlaglab@gmail.com"
+  rate_limit_per_second: 8          # EDGAR allows 10; we use 8 to be safe
+  forms: ["4", "8-K", "13F-HR"]
+
+google_trends:
+  anchor_term: "stock market"       # normalization anchor; documented in preregistration
+  cache_ttl_hours: 24
+  max_retries: 3
+  backoff_base_seconds: 60
+  geo: "US"
+
+fred:
+  api_key_env: "FRED_API_KEY"       # optional; public endpoint works without key at low volume
+  use_alfred_vintages: true         # store what was known at each date, not revised values
+
+# Sources pending terms verification — do not ingest until cleared
+stocktwits:
+  status: PENDING_TERMS_CHECK
+  notes: "As of 2026-10-03, API terms unclear on bulk/automated use. See DATA_SOURCES.md."
+
+reddit:
+  status: PENDING_TERMS_CHECK
+  notes: "Reddit API terms restrict automated data collection. See DATA_SOURCES.md."

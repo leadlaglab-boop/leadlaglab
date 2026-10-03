@@ -1,0 +1,112 @@
+name: Daily ingest
+
+on:
+  schedule:
+    # 18:30 ET (23:30 UTC) — after US market close
+    - cron: "30 23 * * 1-5"
+    # 08:00 ET (13:00 UTC) — morning catch-up run
+    - cron: "0 13 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      date_override:
+        description: "Force a specific date (YYYY-MM-DD); leave blank for today"
+        required: false
+
+permissions:
+  contents: write   # to commit to leadlaglab-data
+  issues: write     # to open failure issues
+
+env:
+  TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+  EDGAR_USER_AGENT: "LeadLagLab leadlaglab@gmail.com"
+  FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+  DATA_REPO_PATH: ../leadlaglab-data
+
+jobs:
+  ingest:
+    name: Ingest signals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Checkout data repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          repository: leadlaglab-boop/leadlaglab-data
+          token: ${{ secrets.DATA_REPO_TOKEN }}
+          path: ../leadlaglab-data
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v4.2.0
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Check market holiday
+        id: holiday_check
+        run: |
+          IS_HOLIDAY=$(uv run python -c "
+          from pipeline.utils.calendar import is_market_holiday
+          import sys, datetime
+          d = '${{ github.event.inputs.date_override }}' or datetime.date.today().isoformat()
+          print('true' if is_market_holiday(d) else 'false')
+          ")
+          echo "is_holiday=$IS_HOLIDAY" >> $GITHUB_OUTPUT
+
+      - name: Run ingest pipeline
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: |
+          DATE_ARG=""
+          if [ -n "${{ github.event.inputs.date_override }}" ]; then
+            DATE_ARG="--date ${{ github.event.inputs.date_override }}"
+          fi
+          uv run lll-ingest $DATE_ARG
+
+      - name: Run feature pipeline
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: uv run lll-features
+
+      - name: Run prediction ledger
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: uv run lll-predict
+
+      - name: Commit data archive
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: |
+          cd ../leadlaglab-data
+          git config user.name "leadlaglab-bot"
+          git config user.email "leadlaglab@gmail.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No new data to commit"
+          else
+            git commit -m "data: $(date -u '+%Y-%m-%d %H:%M UTC') ingest"
+            git push
+          fi
+
+      - name: Build and publish site data
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: uv run lll-build-site
+
+      - name: Monitor archive size
+        run: |
+          SIZE_MB=$(du -sm ../leadlaglab-data | cut -f1)
+          echo "Archive size: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -gt 600 ]; then
+            echo "::warning::Archive size ${SIZE_MB} MB exceeds 600 MB threshold. Consider migrating to R2."
+          fi
+
+      - name: Open failure issue on error
+        if: failure()
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea  # v7.0.1
+        with:
+          script: |
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Pipeline failure] ${new Date().toISOString().split('T')[0]}`,
+              body: `The daily ingest pipeline failed.\n\n**Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\n\n**Triggered by:** ${context.eventName}`,
+              labels: ['pipeline-failure']
+            });

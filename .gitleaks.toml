@@ -1,0 +1,15 @@
+[extend]
+# Use the official gitleaks default ruleset
+useDefault = true
+
+[allowlist]
+description = "Known safe patterns"
+regexes = [
+  # .env.example placeholder values
+  '''(?i)(api_key|secret|token)\s*=\s*$''',
+]
+
+paths = [
+  ".env.example",
+  "docs/SECURITY.md",
+]

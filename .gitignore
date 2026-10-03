@@ -1,0 +1,52 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
+# uv
+.python-version
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node / Astro
+node_modules/
+site/dist/
+site/.astro/
+.npm/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Editors
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# Data (raw archive lives in leadlaglab-data repo)
+*.parquet
+*.arrow
+data/raw/
+
+# Secrets — belt and suspenders; gitleaks is the real guard
+*.pem
+*.key
+*_rsa
+*_ed25519
+secrets.yaml
+secrets.json

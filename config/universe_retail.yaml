@@ -1,0 +1,92 @@
+# Retail-attention basket — analyzed separately from S&P 500 core.
+#
+# Inclusion rule (pre-registered): a ticker is eligible for this cohort if,
+# at the time of inclusion, it has demonstrated at least ONE of:
+#   (a) sustained abnormal retail trading volume (>2x 90-day average) for
+#       5+ consecutive trading days as measured by a public source, OR
+#   (b) short interest >= 10% of float per FINRA or equivalent filing data, OR
+#   (c) documented retail social-media attention event (e.g., top-trending
+#       on StockTwits or Reddit r/wallstreetbets for 3+ days in a 30-day window).
+# Additions and removals are timestamped and appended; the list is never
+# retroactively rewritten.
+#
+# IMPORTANT: This cohort is always evaluated separately from S&P 500.
+# Cross-cohort mixing is not permitted in any signal evaluation.
+
+version: "2026-10-03"
+
+tickers:
+  - ticker: GME
+    name: "GameStop Corp"
+    added: "2026-10-03"
+    inclusion_reason: "short_interest + social_attention"
+
+  - ticker: AMC
+    name: "AMC Entertainment Holdings"
+    added: "2026-10-03"
+    inclusion_reason: "short_interest + social_attention"
+
+  - ticker: TSLA
+    name: "Tesla Inc"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: PLTR
+    name: "Palantir Technologies"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: SOFI
+    name: "SoFi Technologies"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: HOOD
+    name: "Robinhood Markets"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: COIN
+    name: "Coinbase Global"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: MSTR
+    name: "MicroStrategy (now Strategy)"
+    added: "2026-10-03"
+    inclusion_reason: "short_interest + social_attention"
+
+  - ticker: RIVN
+    name: "Rivian Automotive"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: LCID
+    name: "Lucid Group"
+    added: "2026-10-03"
+    inclusion_reason: "short_interest + social_attention"
+
+  - ticker: IONQ
+    name: "IonQ Inc"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: RGTI
+    name: "Rigetti Computing"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: QBTS
+    name: "D-Wave Quantum"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: RKLB
+    name: "Rocket Lab USA"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"
+
+  - ticker: SNAP
+    name: "Snap Inc"
+    added: "2026-10-03"
+    inclusion_reason: "retail_volume + social_attention"

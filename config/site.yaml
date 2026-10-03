@@ -1,0 +1,11 @@
+SITE_NAME: "Lead/Lag Lab"
+SITE_DOMAIN: "leadlaglab.com"
+SITE_URL: "https://leadlaglab.com"
+CONTACT_EMAIL: "leadlaglab@gmail.com"
+DESCRIPTION: "Public alt-data signal research: do attention, news, search, and filings predict stock returns?"
+DISCLAIMER: >
+  This site is a research project, not investment advice. Nothing here
+  constitutes a recommendation to buy or sell any security. All signals
+  and predictions are published for research and educational purposes only.
+  Past performance of any signal does not imply future predictive power.
+ANALYTICS_PROVIDER: "cloudflare"   # privacy-friendly, no cookies
