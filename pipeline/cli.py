@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import os
 from pathlib import Path
-from typing import Optional
 
 import typer
 from dotenv import load_dotenv
@@ -24,7 +23,7 @@ DEFAULT_BACKFILL_START = "2020-01-01"
 def _universe(
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
     config: Path = typer.Option(DEFAULT_CONFIG_PATH, "--config"),
-    as_of: Optional[str] = typer.Option(None, "--as-of", help="YYYY-MM-DD"),
+    as_of: str | None = typer.Option(None, "--as-of", help="YYYY-MM-DD"),
 ) -> None:
     """Build the SecurityMaster from Wikipedia + retail basket config."""
     from pipeline.universe.security_master import build_security_master
@@ -40,11 +39,11 @@ def _universe(
 
 @app.command("prices")
 def _prices(
-    tickers: Optional[str] = typer.Option(
+    tickers: str | None = typer.Option(
         None, "--tickers", help="Comma-separated list; defaults to all active S&P 500"
     ),
     start: str = typer.Option(DEFAULT_BACKFILL_START, "--start", help="YYYY-MM-DD"),
-    end: Optional[str] = typer.Option(None, "--end", help="YYYY-MM-DD; defaults to today"),
+    end: str | None = typer.Option(None, "--end", help="YYYY-MM-DD; defaults to today"),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
     live: bool = typer.Option(False, "--live", help="Mark as live data (default: backfilled)"),
 ) -> None:
@@ -67,7 +66,7 @@ def _prices(
 
     # Build (ticker, security_id) pairs
     active = sm[sm["valid_to"].isna() & sm["ticker"].isin(ticker_list)]
-    pairs = list(zip(active["ticker"], active["security_id"]))
+    pairs = list(zip(active["ticker"], active["security_id"], strict=False))
 
     typer.echo(f"Fetching prices for {len(pairs)} tickers ({start_date} – {end_date})")
 
@@ -85,19 +84,53 @@ def _prices(
 
 @app.command("ingest")
 def _ingest(
-    date: Optional[str] = typer.Option(
-        None, "--date", help="Date to ingest (YYYY-MM-DD). Defaults to today."
+    start: str | None = typer.Option(
+        None, "--start", help="Start date YYYY-MM-DD. Defaults to today."
+    ),
+    end: str | None = typer.Option(None, "--end", help="End date YYYY-MM-DD. Defaults to start."),
+    sources: str | None = typer.Option(
+        None, "--sources", help="Comma-separated: wikipedia,edgar,gdelt,trends. Defaults to all."
     ),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
+    config_dir: Path = typer.Option(Path("config"), "--config-dir"),
+    max_tickers: int | None = typer.Option(
+        None, "--max-tickers", help="Limit to N tickers (for validation runs)."
+    ),
+    live: bool = typer.Option(False, "--live", help="Tag as live data (default: backfilled)."),
+    no_finbert: bool = typer.Option(False, "--no-finbert", help="Skip FinBERT NLP (VADER only)."),
 ) -> None:
-    """Run all signal source collectors for a given date (M3)."""
-    target = date or datetime.date.today().isoformat()
-    typer.echo(f"[ingest] Running for {target} — signal collectors not yet implemented (M3)")
+    """Run all signal source collectors for a date range (M3)."""
+    from pipeline.signals.ingestor import SignalIngestor
+    from pipeline.sources.base import DateRange
+
+    start_date = datetime.date.fromisoformat(start) if start else datetime.date.today()
+    end_date = datetime.date.fromisoformat(end) if end else start_date
+    dr = DateRange(start=start_date, end=end_date)
+    data_type = "live" if live else "backfilled"
+    source_list = [s.strip() for s in sources.split(",")] if sources else None
+
+    typer.echo(
+        f"[ingest] {start_date} – {end_date}, sources={source_list or 'all'}, "
+        f"data_type={data_type}"
+    )
+
+    ingestor = SignalIngestor(
+        data_repo_path=data_repo.resolve(),
+        config_dir=config_dir.resolve(),
+        use_finbert=not no_finbert,
+    )
+    summary = ingestor.run(
+        date_range=dr,
+        data_type=data_type,
+        sources=source_list,
+        max_tickers=max_tickers,
+    )
+    typer.echo(f"[ingest] Done: {summary}")
 
 
 @app.command("features")
 def _features(
-    date: Optional[str] = typer.Option(None, "--date"),
+    date: str | None = typer.Option(None, "--date"),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
 ) -> None:
     """Construct signal features from raw archive (M4)."""
@@ -107,7 +140,7 @@ def _features(
 
 @app.command("evaluate")
 def _evaluate(
-    as_of: Optional[str] = typer.Option(None, "--as-of"),
+    as_of: str | None = typer.Option(None, "--as-of"),
 ) -> None:
     """Run signal evaluation: IC, quintiles, Fama-MacBeth (M5)."""
     typer.echo("[evaluate] Not yet implemented (M5)")
@@ -115,7 +148,7 @@ def _evaluate(
 
 @app.command("predict")
 def _predict(
-    date: Optional[str] = typer.Option(None, "--date"),
+    date: str | None = typer.Option(None, "--date"),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
 ) -> None:
     """Generate and commit today's frozen predictions (M6)."""

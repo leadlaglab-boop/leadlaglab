@@ -1,0 +1,193 @@
+# Wikipedia article mappings: ticker → article title(s).
+#
+# Manual overrides for companies whose article title doesn't match the common name.
+# Any ticker NOT listed here is auto-looked up via the Wikipedia opensearch API
+# the first time it is needed; the result is cached in the archive.
+#
+# Rules for this file:
+# - Use the exact article title (spaces OK; the fetcher URL-encodes it)
+# - "articles" is a list; when multiple articles apply (e.g. products, subsidiaries)
+#   their pageviews are summed.
+# - "ambiguous: true" marks cases where entity matching is uncertain; these are
+#   flagged in the data-quality dashboard and included in the precision audit.
+
+version: "2026-10-03"
+
+overrides:
+
+  # --- Tech mega-caps ---
+  AAPL:
+    articles: ["Apple Inc."]
+  MSFT:
+    articles: ["Microsoft"]
+  GOOGL:
+    articles: ["Alphabet Inc."]
+  GOOG:
+    articles: ["Alphabet Inc."]
+  AMZN:
+    articles: ["Amazon (company)"]
+  META:
+    articles: ["Meta Platforms"]
+  NVDA:
+    articles: ["Nvidia"]
+  TSLA:
+    articles: ["Tesla, Inc."]
+  AVGO:
+    articles: ["Broadcom Inc."]
+  ORCL:
+    articles: ["Oracle Corporation"]
+  CRM:
+    articles: ["Salesforce"]
+  ADBE:
+    articles: ["Adobe Inc."]
+  AMD:
+    articles: ["Advanced Micro Devices"]
+  INTC:
+    articles: ["Intel"]
+  QCOM:
+    articles: ["Qualcomm"]
+
+  # --- Financials ---
+  BRK-B:
+    articles: ["Berkshire Hathaway"]
+  JPM:
+    articles: ["JPMorgan Chase"]
+  BAC:
+    articles: ["Bank of America"]
+  WFC:
+    articles: ["Wells Fargo"]
+  GS:
+    articles: ["Goldman Sachs"]
+  MS:
+    articles: ["Morgan Stanley"]
+  V:
+    articles: ["Visa Inc."]
+  MA:
+    articles: ["Mastercard"]
+  AXP:
+    articles: ["American Express"]
+  BLK:
+    articles: ["BlackRock"]
+  SCHW:
+    articles: ["Charles Schwab Corporation"]
+
+  # --- Consumer ---
+  WMT:
+    articles: ["Walmart"]
+  TGT:
+    articles: ["Target Corporation"]
+    ambiguous: true  # "Target" alone is too common a word
+  COST:
+    articles: ["Costco"]
+  MCD:
+    articles: ["McDonald's"]
+  SBUX:
+    articles: ["Starbucks"]
+  NKE:
+    articles: ["Nike, Inc."]
+  DIS:
+    articles: ["The Walt Disney Company"]
+  NFLX:
+    articles: ["Netflix"]
+
+  # --- Healthcare ---
+  JNJ:
+    articles: ["Johnson & Johnson"]
+  UNH:
+    articles: ["UnitedHealth Group"]
+  PFE:
+    articles: ["Pfizer"]
+  ABBV:
+    articles: ["AbbVie"]
+  MRK:
+    articles: ["Merck & Co."]
+  LLY:
+    articles: ["Eli Lilly and Company"]
+  TMO:
+    articles: ["Thermo Fisher Scientific"]
+  ABT:
+    articles: ["Abbott Laboratories"]
+  BMY:
+    articles: ["Bristol-Myers Squibb"]
+  AMGN:
+    articles: ["Amgen"]
+  GILD:
+    articles: ["Gilead Sciences"]
+  ISRG:
+    articles: ["Intuitive Surgical"]
+
+  # --- Energy ---
+  XOM:
+    articles: ["ExxonMobil"]
+  CVX:
+    articles: ["Chevron Corporation"]
+  COP:
+    articles: ["ConocoPhillips"]
+  SLB:
+    articles: ["SLB (company)"]
+
+  # --- Industrial ---
+  GE:
+    articles: ["GE Aerospace"]
+  CAT:
+    articles: ["Caterpillar Inc."]
+  BA:
+    articles: ["Boeing"]
+  HON:
+    articles: ["Honeywell"]
+  UPS:
+    articles: ["United Parcel Service"]
+  FDX:
+    articles: ["FedEx"]
+  RTX:
+    articles: ["RTX Corporation"]
+
+  # --- Communication ---
+  T:
+    articles: ["AT&T"]
+  VZ:
+    articles: ["Verizon"]
+  TMUS:
+    articles: ["T-Mobile US"]
+  SNAP:
+    articles: ["Snap Inc."]
+    ambiguous: true  # "snap" is also a common word
+  MTCH:
+    articles: ["Match Group"]
+    ambiguous: true
+
+  # --- Financials / Fintech ---
+  PYPL:
+    articles: ["PayPal"]
+  SQ:
+    articles: ["Block, Inc."]  # SQ was the old ticker for Block
+  XYZ:
+    articles: ["Block, Inc."]  # XYZ is the current ticker for Block
+  HOOD:
+    articles: ["Robinhood Markets"]
+  COIN:
+    articles: ["Coinbase"]
+  SOFI:
+    articles: ["SoFi Technologies"]
+
+  # --- Retail attention basket ---
+  GME:
+    articles: ["GameStop"]
+  AMC:
+    articles: ["AMC Entertainment"]
+  MSTR:
+    articles: ["Strategy (company)"]  # formerly MicroStrategy
+  RIVN:
+    articles: ["Rivian"]
+  LCID:
+    articles: ["Lucid Group"]
+  IONQ:
+    articles: ["IonQ"]
+  RGTI:
+    articles: ["Rigetti Computing"]
+  QBTS:
+    articles: ["D-Wave Quantum"]
+  RKLB:
+    articles: ["Rocket Lab"]
+  PLTR:
+    articles: ["Palantir Technologies"]
