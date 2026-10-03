@@ -207,6 +207,28 @@ def _build_site(
     )
 
 
+@app.command("monthly-report")
+def _monthly_report(
+    site_data: Path = typer.Option(DEFAULT_SITE_DATA, "--site-data"),
+    reports_dir: Path = typer.Option(Path("study/reports"), "--reports-dir"),
+    data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
+    month: str | None = typer.Option(None, "--month", help="YYYY-MM; defaults to current month"),
+) -> None:
+    """Generate the monthly state-of-the-study report (M9)."""
+    from pipeline.build.monthly_report import generate_report
+
+    as_of = datetime.date.fromisoformat(f"{month}-01") if month else datetime.date.today()
+    summary, report_path = generate_report(
+        site_data_path=site_data.resolve(),
+        reports_dir=reports_dir.resolve(),
+        data_repo_path=data_repo.resolve() if data_repo.exists() else None,
+        month=as_of,
+    )
+    typer.echo(f"[monthly-report] Written to {report_path}")
+    typer.echo("\n--- GitHub Issue Summary ---\n")
+    typer.echo(summary)
+
+
 # pyproject.toml [project.scripts] entrypoints
 def universe() -> None:
     app(["universe"], standalone_mode=True)
@@ -230,3 +252,7 @@ def predict() -> None:
 
 def build_site() -> None:
     app(["build-site"], standalone_mode=True)
+
+
+def monthly_report() -> None:
+    app(["monthly-report"], standalone_mode=True)

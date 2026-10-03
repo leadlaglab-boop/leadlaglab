@@ -55,6 +55,7 @@ lll-features = "pipeline.cli:features"
 lll-evaluate = "pipeline.cli:evaluate"
 lll-predict = "pipeline.cli:predict"
 lll-build-site = "pipeline.cli:build_site"
+lll-monthly-report = "pipeline.cli:monthly_report"
 
 [build-system]
 requires = ["hatchling"]
