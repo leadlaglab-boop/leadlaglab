@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import textwrap
 from datetime import date
-from pathlib import Path
 from unittest.mock import patch
 
 import pandas as pd
@@ -15,7 +14,6 @@ from pipeline.universe.sp500 import (
     fetch_current_and_changes,
     make_security_id,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures: synthetic Wikipedia HTML

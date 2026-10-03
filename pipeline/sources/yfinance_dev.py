@@ -16,7 +16,7 @@ are rejected by the archive writer's allowlist check.
 from __future__ import annotations
 
 import warnings
-from datetime import date, datetime, timezone
+from datetime import date
 
 import structlog
 
@@ -61,35 +61,38 @@ def fetch_ticker_dev(
 
     # yfinance returns MultiIndex columns when auto_adjust=True
     # Flatten them
-    if hasattr(df.columns, 'get_level_values'):
+    if hasattr(df.columns, "get_level_values"):
         df.columns = [c[0].lower() if isinstance(c, tuple) else c.lower() for c in df.columns]
     else:
         df.columns = [c.lower() for c in df.columns]
 
     records = []
     for idx, row in df.iterrows():
-        row_date = idx.date() if hasattr(idx, 'date') else idx
+        row_date = idx.date() if hasattr(idx, "date") else idx
         close = float(row.get("close", 0))
         if close <= 0:
             continue
 
         from pipeline.utils.calendar import market_close_utc
+
         observed_at = market_close_utc(row_date.isoformat())
 
-        records.append({
-            "security_id": security_id,
-            "date": row_date,
-            "open": float(row.get("open") or 0) or None,
-            "high": float(row.get("high") or 0) or None,
-            "low": float(row.get("low") or 0) or None,
-            "close": close,
-            "adj_close": close,  # yfinance auto_adjust=True gives adj prices as "close"
-            "volume": int(row.get("volume") or 0) or None,
-            "observed_at": observed_at,
-            "source": "yfinance_dev",
-            "data_type": "dev_yfinance",  # intentionally not in _ALLOWED_DATA_TYPES
-            "schema_version": "1.0.0",
-        })
+        records.append(
+            {
+                "security_id": security_id,
+                "date": row_date,
+                "open": float(row.get("open") or 0) or None,
+                "high": float(row.get("high") or 0) or None,
+                "low": float(row.get("low") or 0) or None,
+                "close": close,
+                "adj_close": close,  # yfinance auto_adjust=True gives adj prices as "close"
+                "volume": int(row.get("volume") or 0) or None,
+                "observed_at": observed_at,
+                "source": "yfinance_dev",
+                "data_type": "dev_yfinance",  # intentionally not in _ALLOWED_DATA_TYPES
+                "schema_version": "1.0.0",
+            }
+        )
 
     log.debug("yfinance_dev: fetched", ticker=ticker, rows=len(records))
     return records

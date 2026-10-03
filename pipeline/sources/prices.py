@@ -12,10 +12,8 @@ Idempotent: re-running for the same date range is safe (will overwrite the parti
 
 from __future__ import annotations
 
-import json
 import re
-import time
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 import pandas as pd
@@ -26,7 +24,7 @@ import structlog
 from pipeline.sources.base import DateRange
 from pipeline.sources.stooq import StooqPriceSource
 from pipeline.sources.tiingo import TiingoPriceSource
-from pipeline.validate.schemas import PRICES_DAILY_SCHEMA, SCHEMA_VERSION
+from pipeline.validate.schemas import PRICES_DAILY_SCHEMA
 
 log = structlog.get_logger()
 
@@ -63,9 +61,7 @@ class PriceIngestor:
 
         # Step 2: Tiingo adj_close overlay (if key is available)
         if self.tiingo.available:
-            tiingo_records = self.tiingo.fetch_ticker(
-                ticker, security_id, date_range, data_type
-            )
+            tiingo_records = self.tiingo.fetch_ticker(ticker, security_id, date_range, data_type)
             if tiingo_records:
                 tdf = pd.DataFrame(tiingo_records)[["date", "adj_close"]].rename(
                     columns={"adj_close": "adj_close_tiingo"}

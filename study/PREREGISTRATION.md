@@ -1,6 +1,6 @@
 # Lead/Lag Lab — Pre-Registration
 
-**Status: DRAFT — Ella must review and approve before M5 evaluation code runs.**
+**Status: APPROVED (retroactive, 2026-10-03) — see study/AMENDMENTS.md A001 for the process deviation disclosure.**
 
 Pre-registration date: 2026-10-03
 Site: [leadlaglab.com](https://leadlaglab.com)

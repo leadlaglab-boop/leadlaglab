@@ -148,9 +148,11 @@ def build_manifest(
             "size_bytes": len(content),
         }
 
+    run_at = datetime.now(tz=UTC).isoformat()
     manifest: dict[str, Any] = {
         "schema_version": "1.0.0",
-        "built_at": datetime.now(tz=UTC).isoformat(),
+        "built_at": run_at,
+        "last_pipeline_run_at": run_at,
         "files": files,
     }
     if extra:

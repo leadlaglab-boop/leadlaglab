@@ -12,7 +12,7 @@ Terms: https://www.tiingo.com/legal/terms-of-service
 from __future__ import annotations
 
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import requests
 import structlog
@@ -90,7 +90,7 @@ class TiingoPriceSource(SourcePlugin):
             log.debug("tiingo: no data", ticker=ticker, response=str(data)[:200])
             return []
 
-        fetch_time = datetime.now(tz=timezone.utc)
+        fetch_time = datetime.now(tz=UTC)
         records = []
         for item in data:
             try:
@@ -138,6 +138,7 @@ class TiingoPriceSource(SourcePlugin):
         if not self.available:
             return False
         import datetime
+
         today = datetime.date.today()
         records = self.fetch_ticker(
             "AAPL",

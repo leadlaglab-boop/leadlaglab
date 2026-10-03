@@ -90,6 +90,9 @@ function getResult(horizon: number, cohort: string) {
       </div>
       <h1>{meta.name}</h1>
       <p class="page-lede">{meta.description}</p>
+      {evalResults.as_of && (
+        <p class="text-sm text-muted">Evaluation results as of {formatDate(evalResults.as_of)}</p>
+      )}
     </header>
 
     <!-- Methodology detail -->

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import io
 import time
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pandas as pd
 import requests
@@ -97,7 +97,7 @@ class StooqPriceSource(SourcePlugin):
         df = df.dropna(subset=["date", "close"])
         df = df[df["close"] > 0]
 
-        fetch_time = datetime.now(tz=timezone.utc)
+        fetch_time = datetime.now(tz=UTC)
         records = []
         for _, row in df.iterrows():
             row_date: date = row["date"]
@@ -117,7 +117,9 @@ class StooqPriceSource(SourcePlugin):
                     "low": float(row.get("low") or 0) or None,
                     "close": float(row["close"]),
                     "adj_close": None,  # Stooq does not provide adjusted prices
-                    "volume": int(float(row["volume"])) if "volume" in row and pd.notna(row["volume"]) else None,
+                    "volume": int(float(row["volume"]))
+                    if "volume" in row and pd.notna(row["volume"])
+                    else None,
                     "observed_at": observed_at,
                     "source": self.name,
                     "data_type": data_type,
@@ -138,14 +140,15 @@ class StooqPriceSource(SourcePlugin):
 
     def health_check(self) -> bool:
         """Spot-check AAPL to verify Stooq is reachable and returning expected data."""
-        from pipeline.sources.base import DateRange as DR
         import datetime
+
+        from pipeline.sources.base import DateRange
 
         today = datetime.date.today()
         records = self.fetch_ticker(
             "AAPL",
             "test",
-            DR(today - datetime.timedelta(days=7), today),
+            DateRange(today - datetime.timedelta(days=7), today),
             data_type="backfilled",
         )
         return len(records) > 0
