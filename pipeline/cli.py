@@ -152,20 +152,45 @@ def _features(
 
 @app.command("evaluate")
 def _evaluate(
-    as_of: str | None = typer.Option(None, "--as-of"),
+    start: str = typer.Option(DEFAULT_BACKFILL_START, "--start", help="Eval start date YYYY-MM-DD"),
+    end: str | None = typer.Option(None, "--end", help="Eval end date YYYY-MM-DD"),
+    data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
+    fdr_q: float = typer.Option(0.05, "--fdr-q", help="BH FDR threshold"),
 ) -> None:
-    """Run signal evaluation: IC, quintiles, Fama-MacBeth (M5)."""
-    typer.echo("[evaluate] Not yet implemented (M5)")
+    """Run signal evaluation: IC, quintiles, Fama-MacBeth, walk-forward OOS, BH FDR."""
+    from pipeline.evaluation.engine import run_evaluation
+
+    start_date = datetime.date.fromisoformat(start)
+    end_date = datetime.date.fromisoformat(end) if end else datetime.date.today()
+    out_dir = run_evaluation(
+        data_repo=data_repo.resolve(),
+        start=start_date,
+        end=end_date,
+        fdr_q=fdr_q,
+    )
+    typer.echo(f"[evaluate] Results written to {out_dir}")
 
 
 @app.command("predict")
 def _predict(
     date: str | None = typer.Option(None, "--date"),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
+    score_only: bool = typer.Option(
+        False, "--score-only", help="Score existing predictions; don't generate new ones"
+    ),
 ) -> None:
-    """Generate and commit today's frozen predictions (M6)."""
-    target = date or datetime.date.today().isoformat()
-    typer.echo(f"[predict] Running for {target} — not yet implemented (M6)")
+    """Generate frozen daily predictions and score completed ones."""
+    from pipeline.ledger.scorer import score_predictions
+    from pipeline.ledger.writer import write_daily_predictions
+
+    target = datetime.date.fromisoformat(date) if date else datetime.date.today()
+
+    if not score_only:
+        written = write_daily_predictions(data_repo=data_repo.resolve(), as_of=target)
+        typer.echo(f"[predict] Wrote {len(written)} ledger file(s) for {target}")
+
+    new_outcomes = score_predictions(data_repo=data_repo.resolve(), as_of=target)
+    typer.echo(f"[predict] Scored {len(new_outcomes)} new outcomes")
 
 
 @app.command("build-site")

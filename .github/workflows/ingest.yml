@@ -68,6 +68,10 @@ jobs:
         if: steps.holiday_check.outputs.is_holiday == 'false'
         run: uv run lll-features
 
+      - name: Run evaluation engine
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: uv run lll-evaluate
+
       - name: Run prediction ledger
         if: steps.holiday_check.outputs.is_holiday == 'false'
         run: uv run lll-predict
