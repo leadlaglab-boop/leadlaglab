@@ -72,8 +72,7 @@ const chartContentH = sectorData.length * (barH + barGap);
         {asOf && (
           <p class="hero-meta text-muted text-sm">
             Data through <strong>{asOf}</strong> ·
-            {universe.sp500_count} S&P 500 names ·
-            {universe.retail_attention_count} retail-attention names
+            Universe: {universe.sp500_count} S&P 500 + {universe.retail_attention_count} retail-attention
           </p>
         )}
       </div>
@@ -284,7 +283,7 @@ const chartContentH = sectorData.length * (barH + barGap);
             <div class="card coverage-card">
               <div class="stat-label">S&P 500 universe</div>
               <div class="stat-value">{sp500Securities.length}</div>
-              <div class="stat-caption">names tracked across {sectorData.length} GICS sectors</div>
+              <div class="stat-caption">names in universe across {sectorData.length} GICS sectors</div>
             </div>
             <div class="card coverage-card">
               <div class="stat-label">Retail attention basket</div>
@@ -292,16 +291,15 @@ const chartContentH = sectorData.length * (barH + barGap);
               <div class="stat-caption">high-retail-interest names (GME, AMC, etc.)</div>
             </div>
             <div class="card coverage-card">
-              <div class="stat-label">Total universe</div>
-              <div class="stat-value">{universe.securities.length}</div>
-              <div class="stat-caption">
-                Point-in-time membership tracked from Wikipedia S&P 500 changes table.
-                As of {universe.as_of || asOf || "—"}.
-              </div>
+              <div class="stat-label">Tickers with data</div>
+              <div class="stat-value" id="tickers-with-data">—</div>
+              <div class="stat-caption">price series collected so far</div>
             </div>
             <p class="coverage-note text-xs text-muted">
-              Signal collection covers all names. Evaluation uses only names present
-              in the S&P 500 on the <em>feature date</em> (point-in-time; no look-ahead).
+              Universe of {universe.securities.length} names as of {universe.as_of || asOf || "—"}.
+              Data collection starts when the daily pipeline runs.
+              Evaluation uses only names present in the S&P 500 on the <em>feature date</em>
+              (point-in-time; no look-ahead).
             </p>
           </div>
         </div>
@@ -505,3 +503,15 @@ const chartContentH = sectorData.length * (barH + barGap);
     padding: var(--space-3) 0;
   }
 </style>
+
+<script>
+  fetch("/data/prices_sample.json")
+    .then((r) => r.json())
+    .then((d) => {
+      const el = document.getElementById("tickers-with-data");
+      if (!el) return;
+      const count = d.series ? Object.keys(d.series).length : 0;
+      el.textContent = count === 0 ? "0" : String(count);
+    })
+    .catch(() => {});
+</script>

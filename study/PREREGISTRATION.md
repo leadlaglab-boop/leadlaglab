@@ -1,6 +1,6 @@
 # Lead/Lag Lab — Pre-Registration
 
-**Status: APPROVED (retroactive, 2026-10-03) — see study/AMENDMENTS.md A001 for the process deviation disclosure.**
+**Status: PENDING OWNER REVIEW — owner has not yet reviewed or approved this pre-registration. See study/AMENDMENTS.md A001.**
 
 Pre-registration date: 2026-10-03
 Site: [leadlaglab.com](https://leadlaglab.com)

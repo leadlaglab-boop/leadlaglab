@@ -89,7 +89,9 @@ def _ingest(
     ),
     end: str | None = typer.Option(None, "--end", help="End date YYYY-MM-DD. Defaults to start."),
     sources: str | None = typer.Option(
-        None, "--sources", help="Comma-separated: wikipedia,edgar,gdelt,trends. Defaults to all."
+        None,
+        "--sources",
+        help="Comma-separated: wikipedia,edgar,gdelt,trends. Defaults to wikipedia,edgar,gdelt (trends is opt-in; ToS unclear).",
     ),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
     config_dir: Path = typer.Option(Path("config"), "--config-dir"),

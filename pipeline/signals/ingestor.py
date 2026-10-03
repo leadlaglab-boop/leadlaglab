@@ -134,7 +134,8 @@ class SignalIngestor:
         Run all signal collectors for the given date range and universe.
         Returns a summary dict with counts per source.
         """
-        enabled = set(sources or ["wikipedia", "edgar", "gdelt", "trends"])
+        # trends is opt-in: excluded from default run due to ToS uncertainty (unofficial scraper)
+        enabled = set(sources or ["wikipedia", "edgar", "gdelt"])
         sm = load_security_master(self.data_repo)
         active = sm[sm["valid_to"].isna()].copy()
         if max_tickers:

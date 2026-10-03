@@ -148,9 +148,9 @@ class TestComputeQuintiles:
         results = compute_quintiles(df)
         assert len(results) == 1
         r = results[0]
-        assert (
-            r.quintile_means[5] > r.quintile_means[1]
-        ), f"Q5 mean {r.quintile_means[5]:.3f} should exceed Q1 {r.quintile_means[1]:.3f}"
+        assert r.quintile_means[5] > r.quintile_means[1], (
+            f"Q5 mean {r.quintile_means[5]:.3f} should exceed Q1 {r.quintile_means[1]:.3f}"
+        )
 
     def test_spread_sign_matches_signal_direction(self):
         df_pos = _make_eval_df(ic_signal=0.25, n_dates=80, n_stocks=80)
@@ -287,9 +287,9 @@ class TestWalkForward:
         for horizon in [1, 5, 21]:
             folds = generate_folds(dates, horizon=horizon)
             for fold in folds:
-                assert (
-                    fold.test_start > fold.train_end
-                ), f"test_start {fold.test_start} not after train_end {fold.train_end}"
+                assert fold.test_start > fold.train_end, (
+                    f"test_start {fold.test_start} not after train_end {fold.train_end}"
+                )
 
     def test_no_overlap_between_train_and_test(self):
         dates = self._make_dates()

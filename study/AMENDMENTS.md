@@ -11,28 +11,29 @@ before or when the deviation is disclosed publicly.
 
 **Filed:** 2026-10-03
 **Type:** Process deviation
-**Severity:** Low — ordering is correct; disclosure is precautionary
+**Severity:** Medium — owner had not reviewed or approved the pre-registration before evaluation code ran
 
 **What happened:**
 PREREGISTRATION.md was committed at 2026-10-03 10:02:32 -0400 (commit 4bbdbb0)
 before evaluation code was written (2026-10-03 11:19:21 -0400, commit c9e51fb).
-The ordering is correct: hypotheses and analysis plan were locked before any
-evaluation code ran on real data.
-
-However, PREREGISTRATION.md still says `Status: DRAFT — Ella must review and
-approve before M5 evaluation code runs.` It was never updated to `Status: LOCKED`
-after Ella's review. All milestones M1–M9 were completed in a single session on
-2026-10-03 without explicit inter-milestone approval stops. Ella did not formally
-sign off on the pre-registration before evaluation code was written.
+The temporal ordering is correct — hypotheses were written down before evaluation
+code ran — but the process was not followed: the owner (Ella) had not reviewed or
+approved the pre-registration at any point. All milestones M1–M9 were executed in
+a single automated session on 2026-10-03 without stopping for owner sign-off.
+PREREGISTRATION.md was never advanced from DRAFT to LOCKED, and Ella never
+explicitly reviewed or approved its contents before evaluation code ran on real data.
 
 **Impact on results:**
-None on data ordering (pre-registration was temporally before evaluation code).
-Impact is on process integrity: the DRAFT notice was not cleared before M5 ran.
+The hypotheses and analysis plan are documented before evaluation code, so the
+temporal ordering property holds. However, the owner cannot independently attest
+that she reviewed the pre-registration before seeing any results, because the
+review has not yet occurred. Any conclusions from M5–M9 carry this caveat.
 
 **Corrective action:**
-This deviation is disclosed here. PREREGISTRATION.md will be updated to
-`Status: APPROVED (retroactive)` with a note referencing this amendment.
-Future milestones will stop for explicit Ella approval before proceeding.
+PREREGISTRATION.md status changed from "APPROVED (retroactive)" to
+"PENDING OWNER REVIEW". The status will be updated to LOCKED only after
+Ella explicitly reviews and approves the pre-registration contents.
+Future milestones will stop for explicit owner approval before proceeding.
 
 **Raw git evidence:**
 ```

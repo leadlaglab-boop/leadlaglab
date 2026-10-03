@@ -140,9 +140,9 @@ def test_backfilled_observed_at_is_market_close(stooq: StooqPriceSource) -> None
 
     for r in records:
         expected = market_close_utc(r["date"].isoformat())
-        assert (
-            r["observed_at"] == expected
-        ), f"observed_at={r['observed_at']} != market_close({r['date']})={expected}"
+        assert r["observed_at"] == expected, (
+            f"observed_at={r['observed_at']} != market_close({r['date']})={expected}"
+        )
 
 
 def test_live_observed_at_is_recent(stooq: StooqPriceSource) -> None:
@@ -165,9 +165,9 @@ def test_live_observed_at_is_recent(stooq: StooqPriceSource) -> None:
 
     after = datetime.now(tz=UTC)
     for r in records:
-        assert (
-            before <= r["observed_at"] <= after
-        ), f"Live observed_at={r['observed_at']} is not within expected range"
+        assert before <= r["observed_at"] <= after, (
+            f"Live observed_at={r['observed_at']} is not within expected range"
+        )
 
 
 def test_date_range_validation() -> None:

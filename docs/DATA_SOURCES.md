@@ -69,14 +69,15 @@ This document records every data source used by Lead/Lag Lab: its URL, terms/lic
 ### Google Trends (via pytrends)
 - **URL:** https://trends.google.com
 - **Terms:** https://policies.google.com/terms _(unofficial client; no public API terms)_
-- **Status:** ⚠️ RESTRICTED
-- **What we store:** Relative search interest indices (0–100), batched with anchor term `"stock market"` for normalization. Cached with 24h TTL.
-- **What we publish:** Relative indices and z-scores. Values are Google's "relative interest" numbers, not absolute queries.
+- **Status:** ⚠️ RESTRICTED — **opt-in only; off by default**
+- **What we store (if enabled):** Only derived features (momentum, z-score, rolling percentile). Raw index values (0–100) are computed in memory and discarded; they are never written to the archive or published. This keeps us clear of any redistribution question.
+- **What we publish:** Only derived features derived from relative indices; raw Trends values never appear in the public data repo or the site JSON.
+- **Default:** Google Trends is **excluded from the default ingest run**. To enable it, pass `--sources wikipedia,edgar,gdelt,trends` explicitly. This is intentional: pytrends is an unofficial scraper, Google can block or change it without notice, and the ToS has no public API clause covering this use. We treat it as opt-in until there is a clearer legal path (e.g., an official Trends API).
 - **Rate limit:** Unofficial; Google blocks aggressive scrapers. We retry with exponential backoff (base 60s) and degrade gracefully when blocked. A failed fetch is logged and skipped, not retried in a loop.
 - **Notes:**
   - pytrends is an unofficial library. Google can change its behavior at any time.
-  - All published values are labeled "Source: Google Trends (unofficial)" with the caveat that sampling noise affects comparability across time.
-  - Historical data is labeled "backfilled" and the known limitations (sampling variability, index rescaling) are documented on the Methodology page.
+  - GitHub Actions runner IPs may be more likely to trigger Google's anti-scraping. If blocked, Trends is simply skipped.
+  - Historical data is labeled "backfilled" with known limitations (sampling variability, index rescaling) documented on the Methodology page.
 
 ---
 
