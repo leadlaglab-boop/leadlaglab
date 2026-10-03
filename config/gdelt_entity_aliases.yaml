@@ -1,0 +1,73 @@
+# GDELT entity search aliases: ticker → list of search strings.
+#
+# GDELT indexes article text. These aliases are used to query the GDELT DOC API.
+# Rules:
+# - Use quoted phrases where possible to reduce false matches.
+# - "ambiguous: true" means the company name appears in many unrelated contexts;
+#   these are flagged in the data-quality dashboard and sampled in the precision audit.
+# - For ambiguous names, we require BOTH the company name AND a disambiguating term.
+#
+# Precision audit: every quarter, 200 randomly sampled company-article pairs are
+# hand-labeled and precision is published on the site (see pipeline/validate/precision_audit.py).
+
+version: "2026-10-03"
+
+aliases:
+
+  # Format: primary_query is used alone if unambiguous;
+  # disambiguated_query is used for ambiguous names.
+
+  AAPL:   {primary: '"Apple Inc"', ambiguous: false}
+  MSFT:   {primary: '"Microsoft"', ambiguous: false}
+  GOOGL:  {primary: '"Alphabet Inc" OR "Google"', ambiguous: false}
+  GOOG:   {primary: '"Alphabet Inc" OR "Google"', ambiguous: false}
+  AMZN:   {primary: '"Amazon"', ambiguous: false}
+  META:   {primary: '"Meta Platforms" OR "Facebook"', ambiguous: false}
+  NVDA:   {primary: '"Nvidia"', ambiguous: false}
+  TSLA:   {primary: '"Tesla"', ambiguous: false}
+  AVGO:   {primary: '"Broadcom"', ambiguous: false}
+  ORCL:   {primary: '"Oracle Corporation" OR "Oracle Corp"', ambiguous: false}
+  CRM:    {primary: '"Salesforce"', ambiguous: false}
+  ADBE:   {primary: '"Adobe"', ambiguous: false}
+  AMD:    {primary: '"Advanced Micro Devices" OR "AMD"', ambiguous: false}
+  INTC:   {primary: '"Intel"', ambiguous: false}
+  QCOM:   {primary: '"Qualcomm"', ambiguous: false}
+  NFLX:   {primary: '"Netflix"', ambiguous: false}
+  DIS:    {primary: '"Walt Disney" OR "Disney"', ambiguous: false}
+  JPM:    {primary: '"JPMorgan Chase" OR "JPMorgan"', ambiguous: false}
+  BAC:    {primary: '"Bank of America"', ambiguous: false}
+  WFC:    {primary: '"Wells Fargo"', ambiguous: false}
+  GS:     {primary: '"Goldman Sachs"', ambiguous: false}
+  MS:     {primary: '"Morgan Stanley"', ambiguous: false}
+  V:      {primary: '"Visa Inc" OR "Visa card"', ambiguous: true}  # "Visa" alone too broad
+  MA:     {primary: '"Mastercard"', ambiguous: false}
+  PYPL:   {primary: '"PayPal"', ambiguous: false}
+  WMT:    {primary: '"Walmart"', ambiguous: false}
+  TGT:    {primary: '"Target Corporation" OR "Target Corp"', ambiguous: true}
+  MCD:    {primary: "\"McDonald's\"", ambiguous: false}
+  SBUX:   {primary: '"Starbucks"', ambiguous: false}
+  NKE:    {primary: '"Nike"', ambiguous: false}
+  JNJ:    {primary: '"Johnson Johnson" OR "Johnson & Johnson"', ambiguous: false}
+  UNH:    {primary: '"UnitedHealth"', ambiguous: false}
+  PFE:    {primary: '"Pfizer"', ambiguous: false}
+  ABBV:   {primary: '"AbbVie"', ambiguous: false}
+  MRK:    {primary: '"Merck"', ambiguous: false}
+  LLY:    {primary: '"Eli Lilly"', ambiguous: false}
+  XOM:    {primary: '"ExxonMobil" OR "Exxon Mobil"', ambiguous: false}
+  CVX:    {primary: '"Chevron"', ambiguous: false}
+  XYZ:    {primary: '"Block Inc" OR "Square Inc"', ambiguous: true}  # ticker change
+  SQ:     {primary: '"Block Inc" OR "Square Inc"', ambiguous: true}
+  COIN:   {primary: '"Coinbase"', ambiguous: false}
+  HOOD:   {primary: '"Robinhood Markets" OR "Robinhood app"', ambiguous: true}
+  SOFI:   {primary: '"SoFi Technologies" OR "SoFi"', ambiguous: false}
+  GME:    {primary: '"GameStop"', ambiguous: false}
+  AMC:    {primary: '"AMC Entertainment" OR "AMC theaters"', ambiguous: false}
+  MSTR:   {primary: '"Strategy" stock OR "MicroStrategy"', ambiguous: true}
+  RIVN:   {primary: '"Rivian"', ambiguous: false}
+  LCID:   {primary: '"Lucid Group" OR "Lucid Motors"', ambiguous: false}
+  IONQ:   {primary: '"IonQ"', ambiguous: false}
+  RGTI:   {primary: '"Rigetti Computing" OR "Rigetti"', ambiguous: false}
+  QBTS:   {primary: '"D-Wave Quantum" OR "D-Wave"', ambiguous: false}
+  RKLB:   {primary: '"Rocket Lab"', ambiguous: false}
+  PLTR:   {primary: '"Palantir"', ambiguous: false}
+  SNAP:   {primary: '"Snap Inc" OR "Snapchat"', ambiguous: true}
