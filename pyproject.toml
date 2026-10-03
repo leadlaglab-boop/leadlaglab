@@ -73,7 +73,10 @@ ignore = [
     "E501",   # line too long (handled by formatter)
     "B008",   # typer.Option() in defaults is idiomatic Typer
     "TCH001", # no strict TYPE_CHECKING protocol for this project
+    "TCH002", # no strict TYPE_CHECKING protocol for this project
     "TCH003", # no strict TYPE_CHECKING protocol for this project
+    "N803",   # X / Xy / X_feat are standard ML variable names
+    "N806",   # same
 ]
 
 [tool.mypy]
@@ -84,11 +87,16 @@ warn_unused_configs = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=pipeline --cov-report=term-missing"
+# Coverage is opt-in: pass --cov manually or use `make coverage`.
+# Omitting it here prevents torch/transformers from being instrumented on every run.
+addopts = "-q"
 
 [tool.coverage.run]
 source = ["pipeline"]
-omit = ["tests/*"]
+omit = [
+    "tests/*",
+    "pipeline/signals/nlp.py",   # torch/transformers; slow to instrument
+]
 
 [dependency-groups]
 dev = [
