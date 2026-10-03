@@ -1,0 +1,324 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadSignalSummary, loadEvalResults, formatDate, formatNumber, formatPct } from "@/lib/data";
+
+const summary = loadSignalSummary();
+const evalResults = loadEvalResults();
+
+const signalFamilies = [
+  {
+    key: "wiki_pageviews",
+    slug: "wiki-pageviews",
+    name: "Wikipedia Pageviews",
+    family: "Public Attention",
+    source: "Wikimedia REST API",
+    terms: "CC0 / open",
+    description: "Daily article-view counts for each company's primary Wikipedia page. We measure abnormal attention: the z-score of today's views vs. the trailing 60-day window, then cross-sectionally ranked within date and sector.",
+    hypothesis: "H1: Abnormal Wikipedia attention predicts signed and absolute excess returns at 5 and 21 days.",
+    coverage: "S&P 500 + retail basket",
+    backfillNote: "Historical data available from Wikimedia API (2015–present).",
+    limitations: "Ambiguous company names (e.g. 'Target', 'Block') require manual mapping; precision audited quarterly.",
+  },
+  {
+    key: "gdelt_news_tone",
+    slug: "gdelt-news-tone",
+    name: "GDELT News Tone",
+    family: "News Sentiment",
+    source: "GDELT GKG v2",
+    terms: "Open data",
+    description: "Daily article count and average tone from GDELT's Global Knowledge Graph, matched to companies via name/alias dictionaries. Scored with both FinBERT (financial language model) and VADER (lexical baseline) so the two can be compared.",
+    hypothesis: "H2: Abnormal GDELT tone leads returns more in the retail-attention cohort than the S&P 500 core.",
+    coverage: "S&P 500 + retail basket",
+    backfillNote: "GDELT data available from 2013.",
+    limitations: "Entity matching precision audited; ambiguous names documented in DATA_SOURCES.",
+  },
+  {
+    key: "google_trends",
+    slug: "google-trends",
+    name: "Google Trends",
+    family: "Search Interest",
+    source: "pytrends (unofficial)",
+    terms: "Unofficial; cached aggressively",
+    description: "Relative search interest index, normalized with an anchor term to make cross-date comparisons meaningful. Rate-limited; degrades gracefully when blocked. Sampling noise documented.",
+    hypothesis: "H3 (exploratory): Search interest spikes are correlated with Wikipedia attention (corroboration check).",
+    coverage: "S&P 500 + retail basket",
+    backfillNote: "Historical backfill available with caveats; sampling noise increases for older data.",
+    limitations: "Unofficial API; rate-limited; geographic and language normalization challenges.",
+  },
+  {
+    key: "sec_filings",
+    slug: "sec-filings",
+    name: "SEC Filings",
+    family: "Filings Activity",
+    source: "SEC EDGAR",
+    terms: "Public government data",
+    description: "Form 4 insider transactions, 8-K filing counts, and 13F position changes. EDGAR acceptance timestamps give clean observed_at dates — no look-ahead risk from revision.",
+    hypothesis: "H4: Abnormal insider buy/sell activity predicts 21-day returns.",
+    coverage: "S&P 500",
+    backfillNote: "EDGAR data available from 1994 for 8-K; 2004 for electronic Form 4.",
+    limitations: "Insiders may transact for non-informational reasons (taxes, diversification, 10b5-1 plans).",
+  },
+];
+
+// Build eval lookup: feature -> horizon5 result
+const evalLookup = new Map(
+  evalResults.results
+    .filter((r) => r.horizon_days === 5)
+    .map((r) => [r.feature, r])
+);
+
+const hasEval = evalResults.results.length > 0;
+---
+
+<Base
+  title="Signals"
+  description="Alternative data signals tracked by Lead/Lag Lab: Wikipedia pageviews, GDELT news tone, Google Trends, SEC filings. Definitions, coverage, and evaluation results."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Signal families</h1>
+      <p class="page-lede">
+        Four independent data families, each evaluated separately before any combination.
+        Definitions, sources, hypotheses, and live evaluation results.
+      </p>
+    </header>
+
+    <div class="notice">
+      <strong>Pre-registered.</strong>
+      Signal definitions, evaluation methodology, and failure criteria were committed in
+      <a href="/methodology#preregistration">PREREGISTRATION.md</a> before any evaluation
+      code ran on real data. Changes are in the
+      <a href="/methodology#amendments">amendments log</a>.
+    </div>
+
+    <div class="signals-list">
+      {signalFamilies.map((sig) => {
+        const eval5 = evalLookup.get(sig.key);
+        const summaryMeta = summary.signals.find((s) => s.key === sig.key);
+
+        return (
+          <article class="signal-article card" id={sig.slug}>
+            <div class="signal-article-header">
+              <div>
+                <div class="signal-meta-row">
+                  <span class="badge badge-neutral">{sig.family}</span>
+                  <span class="badge badge-neutral">{sig.source}</span>
+                  <span class="badge badge-neutral">{sig.terms}</span>
+                </div>
+                <h2 class="signal-title">
+                  <a href={`/signals/${sig.slug}`}>{sig.name}</a>
+                </h2>
+              </div>
+              {eval5 && (
+                <div class="signal-ic-summary">
+                  <div class="stat-label">IC (5d)</div>
+                  <div class={`stat-value text-xl ${eval5.ic_mean > 0 ? "text-pos" : "text-neg"}`}>
+                    {formatNumber(eval5.ic_mean)}
+                  </div>
+                  <div class="stat-caption">t={formatNumber(eval5.ic_tstat, 2)}</div>
+                </div>
+              )}
+            </div>
+
+            <p>{sig.description}</p>
+
+            <div class="signal-hypothesis">
+              <span class="text-xs text-mono uppercase text-muted">Hypothesis</span>
+              <p class="text-sm text-muted">{sig.hypothesis}</p>
+            </div>
+
+            <div class="signal-details-grid text-sm">
+              <div>
+                <div class="detail-label">Coverage</div>
+                <div>{sig.coverage}</div>
+              </div>
+              <div>
+                <div class="detail-label">Backfill</div>
+                <div class="text-muted">{sig.backfillNote}</div>
+              </div>
+              <div>
+                <div class="detail-label">Limitations</div>
+                <div class="text-muted">{sig.limitations}</div>
+              </div>
+              {summaryMeta && (
+                <div>
+                  <div class="detail-label">Dates collected</div>
+                  <div class="text-mono">{summaryMeta.n_dates.toLocaleString()}</div>
+                </div>
+              )}
+            </div>
+
+            {hasEval && !eval5 && (
+              <p class="text-sm text-muted text-italic">
+                No evaluation results yet for this signal at 5-day horizon. Check back as data accumulates.
+              </p>
+            )}
+
+            {eval5 && (
+              <div class="eval-mini-grid">
+                <div class="eval-cell">
+                  <div class="stat-label">IC mean</div>
+                  <div class={`text-mono font-600 ${eval5.ic_mean > 0 ? "text-pos" : "text-neg"}`}>
+                    {formatNumber(eval5.ic_mean)}
+                  </div>
+                </div>
+                <div class="eval-cell">
+                  <div class="stat-label">IC t-stat</div>
+                  <div class="text-mono">{formatNumber(eval5.ic_tstat, 2)}</div>
+                </div>
+                <div class="eval-cell">
+                  <div class="stat-label">Q spread</div>
+                  <div class="text-mono">{formatPct(eval5.quintile_spread)}</div>
+                </div>
+                <div class="eval-cell">
+                  <div class="stat-label">Hit rate</div>
+                  <div class="text-mono">{formatPct(eval5.hit_rate)}</div>
+                </div>
+                <div class="eval-cell">
+                  <div class="stat-label">BH-significant</div>
+                  <div>{eval5.ic_bh_reject
+                    ? <span class="badge badge-pos">Yes</span>
+                    : <span class="badge badge-neutral">No</span>}
+                  </div>
+                </div>
+                <div class="eval-cell">
+                  <div class="stat-label">Obs.</div>
+                  <div class="text-mono">{eval5.n_obs.toLocaleString()}</div>
+                </div>
+              </div>
+            )}
+
+            <div class="signal-footer">
+              <a href={`/signals/${sig.slug}`} class="detail-link">
+                Full evaluation results →
+              </a>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+
+    {!hasEval && (
+      <div class="notice" style="margin-top: var(--space-8);">
+        <strong>No evaluation results yet.</strong>
+        The pipeline has been collecting data but sufficient out-of-sample history
+        has not yet accumulated. See the <a href="/methodology#power">power analysis</a>
+        for the estimated timeline.
+      </div>
+    )}
+  </div>
+</Base>
+
+<style>
+  .page-container {
+    padding-block: var(--space-12);
+  }
+
+  .page-header {
+    max-width: var(--max-prose);
+    margin-bottom: var(--space-8);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+
+  .page-lede {
+    font-size: var(--text-lg);
+    color: var(--color-text-muted);
+    max-width: 50ch;
+  }
+
+  .notice { margin-bottom: var(--space-8); }
+
+  .signals-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    margin-top: var(--space-8);
+  }
+
+  .signal-article {
+    padding: var(--space-8);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+  }
+
+  .signal-article-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+  }
+
+  .signal-meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+
+  .signal-title {
+    font-size: var(--text-2xl);
+    margin-bottom: 0;
+  }
+
+  .signal-title a {
+    color: var(--color-text);
+    text-decoration: none;
+  }
+
+  .signal-title a:hover { color: var(--color-accent); }
+
+  .signal-ic-summary {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .signal-hypothesis {
+    border-left: 2px solid var(--color-border);
+    padding-left: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+  }
+
+  .signal-details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+    gap: var(--space-4);
+  }
+
+  .detail-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-1);
+  }
+
+  .eval-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+    gap: var(--space-4);
+    padding: var(--space-4);
+    background: var(--color-bg-subtle);
+    border-radius: var(--radius-md);
+  }
+
+  .eval-cell { display: flex; flex-direction: column; gap: var(--space-1); }
+  .font-600 { font-weight: 600; }
+
+  .signal-footer { margin-top: auto; }
+
+  .detail-link {
+    font-size: var(--text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    color: var(--color-accent);
+  }
+
+  .detail-link:hover { text-decoration: underline; }
+  .text-italic { font-style: italic; }
+</style>

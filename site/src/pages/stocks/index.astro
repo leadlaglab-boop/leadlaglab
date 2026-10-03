@@ -1,0 +1,250 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadUniverse, getSectorList, type Security } from "@/lib/data";
+
+const universe = loadUniverse();
+const sectors = getSectorList(universe);
+const securities = universe.securities;
+---
+
+<Base
+  title="Stocks"
+  description="Browse the S&P 500 and retail-attention basket tracked by Lead/Lag Lab. View signal ranks, price history, and prediction history for any stock."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Stock universe</h1>
+      <p class="page-lede">
+        {universe.sp500_count} S&P 500 names and {universe.retail_attention_count} retail-attention basket names.
+        Point-in-time membership tracked from Wikipedia's S&P 500 changes table.
+      </p>
+    </header>
+
+    <!-- Filter bar -->
+    <div class="filter-bar" id="filter-bar">
+      <input
+        type="search"
+        id="search-input"
+        placeholder="Search ticker or company name…"
+        aria-label="Search stocks"
+        class="search-input"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <select id="sector-filter" aria-label="Filter by sector" class="sector-filter">
+        <option value="">All sectors</option>
+        {sectors.map((s) => <option value={s}>{s}</option>)}
+      </select>
+      <select id="cohort-filter" aria-label="Filter by cohort" class="cohort-filter">
+        <option value="">Both cohorts</option>
+        <option value="sp500">S&P 500</option>
+        <option value="retail_attention">Retail attention</option>
+      </select>
+      <div class="filter-count text-sm text-muted" id="filter-count">
+        {securities.length} stocks
+      </div>
+    </div>
+
+    <!-- Stock table -->
+    <div class="table-wrap">
+      <table class="data-table" id="stocks-table">
+        <thead>
+          <tr>
+            <th>Ticker</th>
+            <th>Company</th>
+            <th>Sector</th>
+            <th>Cohort</th>
+            <th title="Add to watchlist (localStorage)"></th>
+          </tr>
+        </thead>
+        <tbody id="stocks-body">
+          {securities.map((s: Security) => (
+            <tr
+              class="stock-row"
+              data-ticker={s.ticker}
+              data-name={s.name.toLowerCase()}
+              data-sector={s.gics_sector}
+              data-cohort={s.cohort}>
+              <td>
+                <a href={`/stocks/${s.ticker.toLowerCase()}`} class="ticker-link">
+                  {s.ticker}
+                </a>
+              </td>
+              <td class="company-name">{s.name}</td>
+              <td class="text-sm text-muted">{s.gics_sector}</td>
+              <td>
+                <span class={`badge ${s.cohort === "retail_attention" ? "badge-accent" : "badge-neutral"}`}>
+                  {s.cohort === "retail_attention" ? "Retail" : "S&P 500"}
+                </span>
+              </td>
+              <td>
+                <button
+                  class="watchlist-btn"
+                  data-ticker={s.ticker}
+                  aria-label={`Add ${s.ticker} to watchlist`}
+                  title="Add to watchlist">
+                  ☆
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <p class="chart-caption">
+      Universe as of {universe.as_of || "—"}. Point-in-time membership via Wikipedia S&P 500 changes table.
+      Retail-attention basket: GME, AMC, TSLA, PLTR, SOFI, HOOD, COIN, MSTR, RIVN, LCID, IONQ, RGTI, QBTS, RKLB, SNAP.
+    </p>
+  </div>
+
+  <script>
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>(".stock-row"));
+    const countEl = document.getElementById("filter-count")!;
+    const searchInput = document.getElementById("search-input") as HTMLInputElement;
+    const sectorFilter = document.getElementById("sector-filter") as HTMLSelectElement;
+    const cohortFilter = document.getElementById("cohort-filter") as HTMLSelectElement;
+
+    // Watchlist (localStorage)
+    const WATCHLIST_KEY = "leadlaglab_watchlist";
+
+    function getWatchlist(): Set<string> {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(WATCHLIST_KEY) || "[]"));
+      } catch { return new Set(); }
+    }
+
+    function saveWatchlist(wl: Set<string>) {
+      localStorage.setItem(WATCHLIST_KEY, JSON.stringify([...wl]));
+    }
+
+    function updateWatchlistButtons() {
+      const wl = getWatchlist();
+      document.querySelectorAll<HTMLButtonElement>(".watchlist-btn").forEach((btn) => {
+        const ticker = btn.dataset.ticker!;
+        btn.textContent = wl.has(ticker) ? "★" : "☆";
+        btn.setAttribute("aria-label", wl.has(ticker)
+          ? `Remove ${ticker} from watchlist`
+          : `Add ${ticker} to watchlist`);
+        btn.setAttribute("aria-pressed", String(wl.has(ticker)));
+      });
+    }
+
+    document.querySelectorAll<HTMLButtonElement>(".watchlist-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const wl = getWatchlist();
+        const ticker = btn.dataset.ticker!;
+        if (wl.has(ticker)) wl.delete(ticker);
+        else wl.add(ticker);
+        saveWatchlist(wl);
+        updateWatchlistButtons();
+      });
+    });
+
+    updateWatchlistButtons();
+
+    // Filter logic
+    function applyFilters() {
+      const query = searchInput.value.toLowerCase().trim();
+      const sector = sectorFilter.value;
+      const cohort = cohortFilter.value;
+      let visible = 0;
+
+      rows.forEach((row) => {
+        const matchSearch = !query ||
+          row.dataset.ticker!.toLowerCase().includes(query) ||
+          row.dataset.name!.includes(query);
+        const matchSector = !sector || row.dataset.sector === sector;
+        const matchCohort = !cohort || row.dataset.cohort === cohort;
+        const show = matchSearch && matchSector && matchCohort;
+        row.hidden = !show;
+        if (show) visible++;
+      });
+
+      countEl.textContent = `${visible} stock${visible !== 1 ? "s" : ""}`;
+    }
+
+    searchInput.addEventListener("input", applyFilters);
+    sectorFilter.addEventListener("change", applyFilters);
+    cohortFilter.addEventListener("change", applyFilters);
+  </script>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); }
+
+  .page-header {
+    max-width: var(--max-prose);
+    margin-bottom: var(--space-8);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  .filter-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+    margin-bottom: var(--space-4);
+    padding: var(--space-3) var(--space-4);
+    background: var(--color-bg-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+
+  .search-input {
+    flex: 1;
+    min-width: 14rem;
+    height: 2.25rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+  }
+
+  .search-input::placeholder { color: var(--color-text-faint); }
+  .search-input:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+
+  .sector-filter, .cohort-filter {
+    height: 2.25rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .table-wrap { overflow-x: auto; }
+
+  .ticker-link {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--color-accent);
+  }
+
+  .ticker-link:hover { text-decoration: underline; }
+  .company-name { max-width: 22rem; }
+
+  .watchlist-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    color: var(--color-text-faint);
+    padding: var(--space-1);
+    line-height: 1;
+    transition: color var(--transition);
+  }
+
+  .watchlist-btn:hover { color: var(--color-accent); }
+  .watchlist-btn[aria-pressed="true"] { color: var(--color-accent); }
+</style>

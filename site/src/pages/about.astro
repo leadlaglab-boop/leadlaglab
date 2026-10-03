@@ -1,0 +1,154 @@
+---
+import Base from "@/layouts/Base.astro";
+---
+
+<Base
+  title="About"
+  description="About Lead/Lag Lab: who built it, why it exists, the research disclaimers, and data attributions."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>About</h1>
+    </header>
+
+    <div class="prose">
+      <section>
+        <h2>What this is</h2>
+        <p>
+          Lead/Lag Lab is a public research project testing whether alternative data signals —
+          Wikipedia pageviews, GDELT news tone, Google search trends, and SEC filings —
+          predict subsequent stock returns. The question is studied across the S&P 500 and
+          a retail-attention basket, with rigorous methodology and honest reporting.
+        </p>
+        <p>
+          This is a portfolio piece and the seed of a real study.
+          It exists to answer the question seriously, not to sell anything or generate leads.
+        </p>
+      </section>
+
+      <section id="disclaimer">
+        <h2>Disclaimer</h2>
+        <div class="notice notice-warning">
+          <strong>This is research only, not investment advice.</strong>
+          Nothing on this site constitutes a recommendation to buy, sell, or hold any security.
+          Past signal performance does not predict future results.
+          Lead/Lag Lab is not a registered investment adviser. Do not make investment
+          decisions based on anything you read here.
+        </div>
+        <p>
+          The prediction ledger is published for academic purposes. With the current sample size,
+          directional accuracy is not statistically distinguishable from chance, and even when
+          it becomes statistically significant, it does not imply economic significance after
+          transaction costs, taxes, and execution risk.
+        </p>
+      </section>
+
+      <section>
+        <h2>Contact</h2>
+        <p>
+          Questions, errors, or data source concerns:
+          <a href="mailto:leadlaglab@gmail.com">leadlaglab@gmail.com</a>
+        </p>
+        <p>
+          Source code:
+          <a href="https://github.com/leadlaglab-boop/leadlaglab" target="_blank" rel="noopener">
+            github.com/leadlaglab-boop/leadlaglab
+          </a>
+        </p>
+      </section>
+
+      <section>
+        <h2>Data attributions</h2>
+        <p>Full source documentation, terms, and what we store vs. publish:</p>
+        <ul>
+          <li>
+            <strong>Wikipedia Pageviews</strong> — Wikimedia REST API. Data: CC0.
+            <a href="https://wikimedia.org/api/rest_v1/" target="_blank" rel="noopener">API docs</a>
+          </li>
+          <li>
+            <strong>GDELT Project</strong> — Open data.
+            <a href="https://www.gdeltproject.org/about.html#termsofuse" target="_blank" rel="noopener">Terms</a>
+          </li>
+          <li>
+            <strong>SEC EDGAR</strong> — Public government data, no restriction.
+            <a href="https://www.sec.gov/developer" target="_blank" rel="noopener">Developer info</a>
+          </li>
+          <li>
+            <strong>Tiingo</strong> — Derived statistics only; raw price data not redistributed.
+            <a href="https://www.tiingo.com/legal/terms-of-service" target="_blank" rel="noopener">Terms</a>
+          </li>
+          <li>
+            <strong>Google Trends / pytrends</strong> — Unofficial, rate-limited, cached aggressively.
+          </li>
+          <li>
+            <strong>FRED / ALFRED</strong> — Federal Reserve Bank of St. Louis. Open license.
+            <a href="https://fred.stlouisfed.org/docs/api/terms_of_use.html" target="_blank" rel="noopener">Terms</a>
+          </li>
+        </ul>
+        <p>
+          Full details in
+          <a href="https://github.com/leadlaglab-boop/leadlaglab/blob/main/docs/DATA_SOURCES.md"
+            target="_blank" rel="noopener">docs/DATA_SOURCES.md</a>.
+        </p>
+      </section>
+
+      <section>
+        <h2>Privacy</h2>
+        <p>
+          This site uses <a href="https://www.cloudflare.com/web-analytics/" target="_blank" rel="noopener">
+          Cloudflare Web Analytics</a> — no cookies, no personal data stored, no banner required.
+          The watchlist feature stores your selection in browser <code>localStorage</code> only;
+          no server ever receives it.
+        </p>
+      </section>
+
+      <section>
+        <h2>Security</h2>
+        <p>
+          Security policy and responsible disclosure:
+          <a href="https://github.com/leadlaglab-boop/leadlaglab/blob/main/docs/SECURITY.md"
+            target="_blank" rel="noopener">docs/SECURITY.md</a>
+        </p>
+      </section>
+    </div>
+  </div>
+</Base>
+
+<style>
+  .page-container {
+    padding-block: var(--space-12);
+    max-width: 48rem;
+  }
+
+  .page-header { margin-bottom: var(--space-8); }
+
+  .prose section {
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+    margin-bottom: var(--space-10);
+  }
+
+  .prose section:first-child { border-top: none; padding-top: 0; }
+
+  .prose h2 { margin-bottom: var(--space-4); }
+  .prose p + p { margin-top: var(--space-4); }
+  .prose p { max-width: none; }
+
+  .prose ul {
+    margin-top: var(--space-4);
+    padding-left: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    list-style: none;
+    padding-left: 0;
+  }
+
+  .prose li {
+    padding-left: var(--space-4);
+    border-left: 2px solid var(--color-border);
+    line-height: 1.7;
+  }
+
+  .notice { margin-bottom: var(--space-6); }
+</style>

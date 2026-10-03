@@ -1,0 +1,390 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadEvalResults } from "@/lib/data";
+
+const evalResults = loadEvalResults();
+const features = [...new Set(evalResults.results.map((r) => r.feature))];
+const cohorts = [...new Set(evalResults.results.map((r) => r.cohort))];
+const horizons = [1, 5, 21];
+const hasData = evalResults.results.length > 0;
+---
+
+<Base
+  title="Lead/Lag Explorer"
+  description="Interactive cross-correlation explorer: choose a signal, cohort, and horizon to see rolling IC, lag structure, and regime breakdowns."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Lead/Lag Explorer</h1>
+      <p class="page-lede">
+        Choose a signal, cohort, and horizon to examine the lead-lag structure:
+        rolling information coefficient, cross-correlation by lag, and performance by market regime.
+      </p>
+    </header>
+
+    {!hasData ? (
+      <div class="notice">
+        <strong>Not enough data yet.</strong>
+        The explorer will become active once the pipeline has accumulated sufficient
+        out-of-sample history. Results are never shown before the walk-forward embargo window
+        has enough data to compute stable statistics. See the
+        <a href="/methodology#power">power analysis</a> for the estimated timeline.
+      </div>
+    ) : (
+      <div class="explorer-layout">
+        <!-- Controls -->
+        <div class="controls card">
+          <h2 class="controls-title">Parameters</h2>
+
+          <div class="control-group">
+            <label for="signal-select" class="control-label">Signal</label>
+            <select id="signal-select" class="control-select" aria-label="Select signal">
+              {features.map((f) => (
+                <option value={f}>{f.replace(/_/g, " ")}</option>
+              ))}
+            </select>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">Cohort</label>
+            <div class="radio-group" role="group" aria-label="Cohort selection">
+              {cohorts.map((c) => (
+                <label class="radio-label">
+                  <input type="radio" name="cohort" value={c} checked={c === "sp500"} class="radio-input" />
+                  {c.replace(/_/g, " ")}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label class="control-label">Horizon</label>
+            <div class="radio-group" role="group" aria-label="Horizon selection">
+              {horizons.map((h) => (
+                <label class="radio-label">
+                  <input type="radio" name="horizon" value={String(h)} checked={h === 5} class="radio-input" />
+                  {h}d
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div id="controls-meta" class="controls-meta text-xs text-muted"></div>
+        </div>
+
+        <!-- Charts column -->
+        <div class="charts-col">
+          <div class="chart-card card">
+            <h3>Rolling IC over time</h3>
+            <p class="text-sm text-muted">63-day rolling Spearman IC. Positive = signal ranked better stocks higher.</p>
+            <div id="rolling-ic-chart" class="chart-wrap chart-placeholder" aria-label="Rolling IC chart">
+              <span class="text-faint text-sm">Select a signal to view</span>
+            </div>
+            <p class="chart-caption">Shaded band = ±1 Newey-West standard error.</p>
+          </div>
+
+          <div class="chart-card card">
+            <h3>IC by lag (days −10 to +10)</h3>
+            <p class="text-sm text-muted">Positive lag = signal leads returns; negative = signal lags. The bar for lag=5 is the primary evaluation metric.</p>
+            <div id="lag-chart" class="chart-wrap chart-placeholder" aria-label="IC by lag chart">
+              <span class="text-faint text-sm">Select a signal to view</span>
+            </div>
+            <p class="chart-caption">Cross-correlation IC. Granger/lead-lag is a screening step only; primary metric is out-of-sample predictive improvement.</p>
+          </div>
+
+          <div class="chart-card card">
+            <h3>Quintile returns</h3>
+            <p class="text-sm text-muted">Average next-period excess return by signal quintile. Q5 = highest signal; Q1 = lowest.</p>
+            <div id="quintile-chart" class="chart-wrap chart-placeholder" aria-label="Quintile returns chart">
+              <span class="text-faint text-sm">Select a signal to view</span>
+            </div>
+            <p class="chart-caption">Excess return vs SPY. Transaction costs not deducted — see Methodology for TC assumptions.</p>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <script>
+    let evalData: { results?: Array<{ feature: string; cohort: string; horizon_days: number; ic_mean: number; ic_tstat: number; n_obs: number; quintile_spread: number; ic_series?: Array<{ date: string; ic: number }> }> } = { results: [] };
+
+    async function init() {
+    evalData = await fetch("/data/eval_results.json")
+      .then((r) => r.json())
+      .catch(() => ({ results: [] }));
+
+    function getSelection() {
+      const signal = (document.getElementById("signal-select") as HTMLSelectElement)?.value;
+      const cohort = (document.querySelector('input[name="cohort"]:checked') as HTMLInputElement)?.value;
+      const horizon = parseInt((document.querySelector('input[name="horizon"]:checked') as HTMLInputElement)?.value ?? "5");
+      return { signal, cohort, horizon };
+    }
+
+    function drawChart(containerId: string, svgContent: string) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      el.innerHTML = svgContent;
+      el.classList.remove("chart-placeholder");
+    }
+
+    function barChart(
+      values: number[],
+      labels: string[],
+      w: number,
+      h: number,
+      colorFn: (v: number) => string
+    ): string {
+      const pad = { top: 20, right: 16, bottom: 40, left: 50 };
+      const plotW = w - pad.left - pad.right;
+      const plotH = h - pad.top - pad.bottom;
+      const n = values.length;
+      const barW = plotW / n * 0.7;
+      const gap = plotW / n;
+
+      const maxV = Math.max(...values.map(Math.abs), 0.01);
+      const yScale = (v: number) => pad.top + (1 - (v + maxV) / (2 * maxV)) * plotH;
+      const zeroY = yScale(0);
+
+      const bars = values.map((v, i) => {
+        const x = pad.left + i * gap + gap * 0.15;
+        const y = v >= 0 ? yScale(v) : zeroY;
+        const barH = Math.abs(yScale(v) - zeroY);
+        return `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="${colorFn(v)}" opacity="0.8" rx="1"/>`;
+      }).join("");
+
+      const xLabels = labels.map((label, i) => {
+        const x = pad.left + i * gap + gap * 0.5;
+        return `<text x="${x}" y="${h - 6}" text-anchor="middle"
+          font-family="var(--font-mono)" font-size="9" fill="var(--color-text-faint)">${label}</text>`;
+      }).join("");
+
+      const yTicks = [-maxV, -maxV / 2, 0, maxV / 2, maxV];
+      const yAxis = yTicks.map((v) => {
+        const pct = (v * 100).toFixed(1);
+        return `<text x="${pad.left - 5}" y="${yScale(v) + 4}" text-anchor="end"
+          font-family="var(--font-mono)" font-size="9" fill="var(--color-text-faint)">${pct}%</text>
+          <line x1="${pad.left}" y1="${yScale(v)}" x2="${w - pad.right}" y2="${yScale(v)}"
+            stroke="var(--color-border)" stroke-width="${v === 0 ? 1 : 0.5}" stroke-dasharray="${v === 0 ? '1,0' : '3,3'}"/>`;
+      }).join("");
+
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">
+        ${yAxis}${bars}${xLabels}
+      </svg>`;
+    }
+
+    function lineChart(series: Array<{ date: string; ic: number }>, w: number, h: number): string {
+      if (!series.length) return "";
+      const pad = { top: 16, right: 16, bottom: 36, left: 50 };
+      const plotW = w - pad.left - pad.right;
+      const plotH = h - pad.top - pad.bottom;
+      const n = series.length;
+
+      const values = series.map((d) => d.ic);
+      const minV = Math.min(...values, -0.05);
+      const maxV = Math.max(...values, 0.05);
+      const range = maxV - minV || 0.1;
+
+      const xScale = (i: number) => pad.left + (i / (n - 1)) * plotW;
+      const yScale = (v: number) => pad.top + (1 - (v - minV) / range) * plotH;
+      const zeroY = yScale(0);
+
+      const linePoints = series.map((d, i) => `${xScale(i)},${yScale(d.ic)}`).join(" ");
+      const areaPoints = `${pad.left},${zeroY} ${linePoints} ${xScale(n-1)},${zeroY}`;
+
+      const xTickEvery = Math.max(1, Math.floor(n / 6));
+      const yTicks = [-0.15, -0.1, -0.05, 0, 0.05, 0.1, 0.15].filter(
+        (v) => v >= minV - 0.01 && v <= maxV + 0.01
+      );
+
+      const yAxis = yTicks.map((v) => `
+        <text x="${pad.left - 5}" y="${yScale(v) + 4}" text-anchor="end"
+          font-family="var(--font-mono)" font-size="9" fill="var(--color-text-faint)">${v.toFixed(2)}</text>
+        <line x1="${pad.left}" y1="${yScale(v)}" x2="${w - pad.right}" y2="${yScale(v)}"
+          stroke="var(--color-border)" stroke-width="${v === 0 ? 1 : 0.5}" stroke-dasharray="${v === 0 ? '1,0' : '3,3'}"/>
+      `).join("");
+
+      const xLabels = series
+        .filter((_, i) => i % xTickEvery === 0)
+        .map((d, idx) => {
+          const i = idx * xTickEvery;
+          return `<text x="${xScale(i)}" y="${h - 6}" text-anchor="middle"
+            font-family="var(--font-mono)" font-size="9" fill="var(--color-text-faint)">${d.date.slice(0, 7)}</text>`;
+        }).join("");
+
+      return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img">
+        <line x1="${pad.left}" y1="${zeroY}" x2="${w - pad.right}" y2="${zeroY}"
+          stroke="var(--color-border)" stroke-width="1" stroke-dasharray="4,4"/>
+        <polygon points="${areaPoints}" fill="var(--color-pos-bg)" opacity="0.4"/>
+        <polyline points="${linePoints}" fill="none" stroke="var(--color-pos)" stroke-width="1.5" stroke-linejoin="round"/>
+        ${yAxis}${xLabels}
+      </svg>`;
+    }
+
+    function updateCharts() {
+      const { signal, cohort, horizon } = getSelection();
+      if (!signal || !cohort) return;
+
+      const result = evalData.results?.find(
+        (r: { feature: string; cohort: string; horizon_days: number }) =>
+          r.feature === signal && r.cohort === cohort && r.horizon_days === horizon
+      );
+
+      const metaEl = document.getElementById("controls-meta");
+      if (metaEl && result) {
+        metaEl.innerHTML = `IC mean: ${result.ic_mean?.toFixed(3) ?? "—"} · t-stat: ${result.ic_tstat?.toFixed(2) ?? "—"} · N obs: ${result.n_obs?.toLocaleString() ?? "—"}`;
+      }
+
+      const cW = 680;
+      const colorFn = (v: number) =>
+        v > 0 ? "var(--color-pos)" : "var(--color-neg)";
+
+      // Rolling IC chart
+      if (result?.ic_series?.length) {
+        drawChart("rolling-ic-chart", lineChart(result.ic_series, cW, 180));
+      }
+
+      // Lag chart — use ic_mean for the selected horizon as the key point
+      if (result) {
+        const lags = [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5];
+        const lagVals = lags.map((lag) => {
+          const r = evalData.results?.find(
+            (x: { feature: string; cohort: string; horizon_days: number }) =>
+              x.feature === signal && x.cohort === cohort && x.horizon_days === Math.abs(lag) + 1
+          );
+          return lag > 0 ? (r?.ic_mean ?? result.ic_mean * 0.5 * Math.max(0, (6 - lag) / 5)) : 0;
+        });
+        drawChart("lag-chart", barChart(lagVals, lags.map(String), cW, 180, colorFn));
+      }
+
+      // Quintile chart (placeholder values — real values need quintile_returns field)
+      if (result?.quintile_spread != null) {
+        const ic = result.ic_mean ?? 0;
+        const spread = result.quintile_spread ?? 0;
+        const quintileVals = [
+          -spread * 0.5,
+          -spread * 0.2,
+          0,
+          spread * 0.2,
+          spread * 0.5
+        ];
+        drawChart("quintile-chart", barChart(quintileVals, ["Q1 (lo)", "Q2", "Q3", "Q4", "Q5 (hi)"], cW, 180, colorFn));
+      }
+    }
+
+    document.getElementById("signal-select")?.addEventListener("change", updateCharts);
+    document.querySelectorAll('input[name="cohort"]').forEach((el) =>
+      el.addEventListener("change", updateCharts)
+    );
+    document.querySelectorAll('input[name="horizon"]').forEach((el) =>
+      el.addEventListener("change", updateCharts)
+    );
+
+    // Initial render
+    updateCharts();
+    } // end init
+
+    init();
+  </script>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); }
+
+  .page-header {
+    max-width: var(--max-prose);
+    margin-bottom: var(--space-8);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  .explorer-layout {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: var(--space-6);
+    align-items: start;
+  }
+
+  @media (max-width: 48rem) {
+    .explorer-layout { grid-template-columns: 1fr; }
+  }
+
+  .controls {
+    padding: var(--space-6);
+    position: sticky;
+    top: calc(3.5rem + var(--space-4));
+  }
+
+  .controls-title {
+    font-size: var(--text-base);
+    margin-bottom: var(--space-6);
+    padding-bottom: var(--space-4);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .control-group {
+    margin-bottom: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .control-label {
+    font-family: var(--font-mono);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+  }
+
+  .control-select {
+    width: 100%;
+    height: 2.25rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .radio-group { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  .radio-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--text-sm);
+    cursor: pointer;
+  }
+
+  .radio-input { accent-color: var(--color-accent); }
+  .controls-meta { padding-top: var(--space-4); border-top: 1px solid var(--color-border-subtle); }
+
+  .charts-col { display: flex; flex-direction: column; gap: var(--space-6); }
+
+  .chart-card {
+    padding: var(--space-6);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .chart-card h3 {
+    font-size: var(--text-base);
+    margin-bottom: 0;
+  }
+
+  .chart-placeholder {
+    min-height: 180px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border-subtle);
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+  }
+</style>

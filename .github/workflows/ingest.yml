@@ -94,6 +94,19 @@ jobs:
         if: steps.holiday_check.outputs.is_holiday == 'false'
         run: uv run lll-build-site
 
+      - name: Commit and push site data
+        if: steps.holiday_check.outputs.is_holiday == 'false'
+        run: |
+          git config user.name "leadlaglab-bot"
+          git config user.email "leadlaglab@gmail.com"
+          git add site/public/data/
+          if git diff --staged --quiet; then
+            echo "No site data changes to commit"
+          else
+            git commit -m "data: $(date -u '+%Y-%m-%d') site JSON rebuild"
+            git push
+          fi
+
       - name: Monitor archive size
         run: |
           SIZE_MB=$(du -sm ../leadlaglab-data | cut -f1)

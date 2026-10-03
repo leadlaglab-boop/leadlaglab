@@ -1,0 +1,309 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadPredictionLedger, formatDate } from "@/lib/data";
+
+const ledger = loadPredictionLedger();
+const predictions = ledger.predictions ?? [];
+const scored = predictions.filter((p) => p.realized_excess_return != null);
+const pending = predictions.filter((p) => p.realized_excess_return == null);
+
+const hitRate = scored.length > 0
+  ? scored.filter((p) => p.correct).length / scored.length
+  : null;
+
+const meanError = scored.length > 0
+  ? scored.reduce((s, p) => s + Math.abs((p.realized_excess_return ?? 0) - p.predicted_excess_return), 0) / scored.length
+  : null;
+---
+
+<Base
+  title="Predictions Ledger"
+  description="Every prediction made by Lead/Lag Lab models before outcomes were known. Immutable, timestamped, with model version and data hash."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Predictions ledger</h1>
+      <p class="page-lede">
+        Every frozen prediction made before outcomes were known, with the model version and data hash.
+        Scored as outcomes arrive. The ledger is immutable — predictions cannot be rewritten.
+      </p>
+    </header>
+
+    <!-- Scorecard -->
+    <div class="scorecard-grid">
+      <div class="card">
+        <div class="stat-label">Total predictions</div>
+        <div class="stat-value">{predictions.length.toLocaleString()}</div>
+        <div class="stat-caption">{pending.length} pending, {scored.length} scored</div>
+      </div>
+
+      {hitRate !== null && (
+        <div class="card">
+          <div class="stat-label">Direction hit rate</div>
+          <div class={`stat-value ${hitRate > 0.52 ? "text-pos" : hitRate < 0.48 ? "text-neg" : ""}`}>
+            {(hitRate * 100).toFixed(1)}%
+          </div>
+          <div class="stat-caption">vs 50% baseline; binomial CI below</div>
+        </div>
+      )}
+
+      {meanError !== null && (
+        <div class="card">
+          <div class="stat-label">Mean abs. error</div>
+          <div class="stat-value text-mono">{(meanError * 100).toFixed(2)}%</div>
+          <div class="stat-caption">vs predicted excess return</div>
+        </div>
+      )}
+    </div>
+
+    {predictions.length === 0 && (
+      <div class="notice">
+        <strong>No predictions yet.</strong> Daily predictions are written to the ledger
+        each evening after US market close. The first predictions will appear once the
+        feature pipeline has accumulated enough history.
+      </div>
+    )}
+
+    {scored.length > 0 && (
+      <section class="section-block">
+        <h2>Calibration</h2>
+        <p class="text-sm text-muted">
+          Are predicted excess returns calibrated to realized returns?
+          Ideally, predictions of +1% should average realized returns of +1%.
+        </p>
+        <div id="calibration-chart" class="chart-wrap chart-placeholder" aria-label="Calibration chart">
+          <noscript>Enable JavaScript to view the chart.</noscript>
+        </div>
+        <p class="chart-caption">
+          Each point is one prediction. Perfect calibration = 45° diagonal.
+          Sample size is currently too small for strong conclusions — see power analysis.
+        </p>
+      </section>
+    )}
+
+    <!-- Full ledger table -->
+    {predictions.length > 0 && (
+      <section class="section-block">
+        <div class="table-header">
+          <h2>Full ledger</h2>
+          <div class="table-controls">
+            <input type="search" id="ledger-search" placeholder="Filter ticker…"
+              class="search-input text-sm" aria-label="Filter predictions" />
+            <select id="horizon-filter" class="sector-filter text-sm" aria-label="Filter by horizon">
+              <option value="">All horizons</option>
+              <option value="1">1d</option>
+              <option value="5">5d</option>
+              <option value="21">21d</option>
+            </select>
+            <select id="model-filter" class="sector-filter text-sm" aria-label="Filter by model">
+              <option value="">All models</option>
+              {[...new Set(predictions.map((p) => p.model_id).filter(Boolean))].map((m) => (
+                <option value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div class="table-scroll">
+          <table class="data-table" id="ledger-table">
+            <thead>
+              <tr>
+                <th>Made at</th>
+                <th>Ticker</th>
+                <th>Horizon</th>
+                <th>Direction</th>
+                <th>Predicted excess</th>
+                <th>90% CI</th>
+                <th>Realized</th>
+                <th>Correct</th>
+                <th>Model</th>
+                <th title="SHA-256 of input feature hash at prediction time">Data hash</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-body">
+              {predictions.slice(0, 200).map((p) => (
+                <tr class="ledger-row"
+                  data-ticker={p.ticker}
+                  data-horizon={String(p.horizon_days)}
+                  data-model={p.model_id ?? ""}>
+                  <td class="text-mono text-xs">{p.made_at?.slice(0, 10) ?? "—"}</td>
+                  <td>
+                    <a href={`/stocks/${(p.ticker ?? "").toLowerCase()}`}
+                      class="ticker-link">{p.ticker}</a>
+                  </td>
+                  <td class="text-mono">{p.horizon_days}d</td>
+                  <td>
+                    {p.predicted_direction === "up"
+                      ? <span class="badge badge-pos">↑ Up</span>
+                      : <span class="badge badge-neg">↓ Down</span>}
+                  </td>
+                  <td class={`text-mono ${p.predicted_excess_return > 0 ? "text-pos" : "text-neg"}`}>
+                    {(p.predicted_excess_return * 100).toFixed(2)}%
+                  </td>
+                  <td class="text-mono text-muted text-xs">
+                    [{(p.confidence_interval[0] * 100).toFixed(1)}, {(p.confidence_interval[1] * 100).toFixed(1)}]
+                  </td>
+                  <td class={`text-mono ${p.realized_excess_return == null ? "text-muted" : p.realized_excess_return > 0 ? "text-pos" : "text-neg"}`}>
+                    {p.realized_excess_return == null
+                      ? "Pending"
+                      : `${(p.realized_excess_return * 100).toFixed(2)}%`}
+                  </td>
+                  <td>
+                    {p.correct == null
+                      ? <span class="text-muted">—</span>
+                      : p.correct
+                        ? <span class="badge badge-pos">✓</span>
+                        : <span class="badge badge-neg">✗</span>}
+                  </td>
+                  <td class="text-xs text-muted">{p.model_id ?? "—"}</td>
+                  <td class="text-mono text-xs text-faint">{p.prediction_id?.slice(0, 8) ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {predictions.length > 200 && (
+          <p class="chart-caption">Showing first 200 of {predictions.length.toLocaleString()} predictions.</p>
+        )}
+      </section>
+    )}
+
+    <div class="notice notice-warning" style="margin-top: var(--space-8);">
+      <strong>Research only.</strong> These predictions are part of an academic study.
+      They are not investment advice and should not be used to make trading decisions.
+      With the current sample size, directional accuracy is not statistically distinguishable from chance.
+    </div>
+  </div>
+
+  <script>
+    const rows = Array.from(document.querySelectorAll<HTMLTableRowElement>(".ledger-row"));
+    const searchEl = document.getElementById("ledger-search") as HTMLInputElement;
+    const horizonEl = document.getElementById("horizon-filter") as HTMLSelectElement;
+    const modelEl = document.getElementById("model-filter") as HTMLSelectElement;
+
+    function applyFilters() {
+      const query = searchEl?.value?.toLowerCase().trim() ?? "";
+      const horizon = horizonEl?.value ?? "";
+      const model = modelEl?.value ?? "";
+
+      rows.forEach((row) => {
+        const matchTicker = !query || row.dataset.ticker?.toLowerCase().includes(query);
+        const matchHorizon = !horizon || row.dataset.horizon === horizon;
+        const matchModel = !model || row.dataset.model === model;
+        row.hidden = !(matchTicker && matchHorizon && matchModel);
+      });
+    }
+
+    searchEl?.addEventListener("input", applyFilters);
+    horizonEl?.addEventListener("change", applyFilters);
+    modelEl?.addEventListener("change", applyFilters);
+
+    // Calibration scatter
+    const scored = rows.filter((r) => !r.querySelector(".text-muted")?.textContent?.includes("Pending"));
+    if (scored.length > 2) {
+      const chartEl = document.getElementById("calibration-chart");
+      if (chartEl) {
+        const w = Math.min(chartEl.clientWidth || 500, 600);
+        const h = 360;
+        const pad = { top: 20, right: 20, bottom: 50, left: 60 };
+        const plotW = w - pad.left - pad.right;
+        const plotH = h - pad.top - pad.bottom;
+
+        // We can't easily extract data from rendered rows, so show a placeholder
+        // In production this would read from predictions.json directly
+        chartEl.innerHTML = `<p class="text-sm text-muted" style="padding:var(--space-8);text-align:center">Calibration chart will render here once more predictions are scored.</p>`;
+        chartEl.classList.remove("chart-placeholder");
+      }
+    }
+  </script>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); }
+
+  .page-header {
+    max-width: var(--max-prose);
+    margin-bottom: var(--space-8);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  .scorecard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+    gap: var(--space-4);
+    margin-bottom: var(--space-8);
+  }
+
+  .section-block {
+    margin-bottom: var(--space-10);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+  }
+
+  .section-block h2 { margin-bottom: var(--space-4); }
+
+  .table-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-4);
+  }
+
+  .table-header h2 { margin-bottom: 0; }
+
+  .table-controls {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    height: 2rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    min-width: 10rem;
+  }
+
+  .sector-filter {
+    height: 2rem;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    cursor: pointer;
+  }
+
+  .table-scroll { overflow-x: auto; }
+
+  .ticker-link {
+    font-family: var(--font-mono);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    text-decoration: none;
+    color: var(--color-accent);
+  }
+
+  .ticker-link:hover { text-decoration: underline; }
+
+  .chart-placeholder {
+    min-height: 200px;
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--color-text-faint);
+  }
+</style>

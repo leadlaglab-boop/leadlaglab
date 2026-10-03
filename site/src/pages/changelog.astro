@@ -1,0 +1,270 @@
+---
+import Base from "@/layouts/Base.astro";
+import { loadManifest, loadPipelineStatus, formatDate } from "@/lib/data";
+
+const manifest = loadManifest();
+const status = loadPipelineStatus();
+
+const statusColor = {
+  ok: "badge-pos",
+  degraded: "badge-accent",
+  error: "badge-neg",
+  never: "badge-neutral",
+  stale: "badge-accent",
+} as const;
+---
+
+<Base
+  title="Changelog & Status"
+  description="Lead/Lag Lab pipeline health, last successful run per source, data gaps, model versions, and site changelog."
+>
+  <div class="container page-container">
+    <header class="page-header">
+      <h1>Status & changelog</h1>
+      <p class="page-lede">
+        Pipeline health, last successful run per data source, recent site changes,
+        and model version history.
+      </p>
+    </header>
+
+    <!-- Pipeline health banner -->
+    <div class={`status-banner ${status.overall_status === "ok" ? "status-ok" : status.overall_status === "degraded" ? "status-degraded" : "status-error"}`}>
+      <div class="status-indicator" aria-hidden="true">
+        {status.overall_status === "ok" ? "●" : status.overall_status === "degraded" ? "◐" : "○"}
+      </div>
+      <div>
+        <strong>
+          {status.overall_status === "ok"
+            ? "All systems operational"
+            : status.overall_status === "degraded"
+            ? "Some sources degraded"
+            : status.overall_status === "error"
+            ? "Pipeline error"
+            : "Pipeline status unknown"}
+        </strong>
+        <div class="text-sm">
+          Data as of: {manifest.built_at ? formatDate(manifest.built_at) : "—"}
+        </div>
+      </div>
+    </div>
+
+    <!-- Per-source status table -->
+    <section class="section-block">
+      <h2>Data source status</h2>
+
+      {status.sources.length === 0 ? (
+        <p class="text-muted text-sm">
+          No source status data yet. The pipeline will populate this after the first run.
+        </p>
+      ) : (
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Last success</th>
+                <th>Last attempt</th>
+                <th>Records today</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody>
+              {status.sources.map((s) => (
+                <tr>
+                  <td class="text-mono text-sm">{s.source}</td>
+                  <td>
+                    <span class={`badge ${statusColor[s.status] ?? "badge-neutral"}`}>
+                      {s.status}
+                    </span>
+                  </td>
+                  <td class="text-mono text-xs text-muted">{s.last_success ? formatDate(s.last_success) : "never"}</td>
+                  <td class="text-mono text-xs text-muted">{s.last_attempt ? formatDate(s.last_attempt) : "—"}</td>
+                  <td class="text-mono">{s.records_today.toLocaleString()}</td>
+                  <td class="text-sm text-muted">{s.error_message ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+
+    <!-- Recent pipeline runs -->
+    <section class="section-block">
+      <h2>Recent pipeline runs</h2>
+
+      {status.recent_runs.length === 0 ? (
+        <p class="text-muted text-sm">No runs logged yet.</p>
+      ) : (
+        <div class="runs-list">
+          {status.recent_runs.map((run) => (
+            <div class={`run-row ${run.status === "success" ? "run-ok" : run.status === "failed" ? "run-error" : "run-running"}`}>
+              <div class="run-status-dot" aria-hidden="true">
+                {run.status === "success" ? "✓" : run.status === "failed" ? "✗" : "↻"}
+              </div>
+              <div class="run-body">
+                <div class="run-header">
+                  <span class="text-mono text-sm">{run.started_at?.slice(0, 16).replace("T", " ")}</span>
+                  <span class={`badge ${run.status === "success" ? "badge-pos" : run.status === "failed" ? "badge-neg" : "badge-accent"}`}>
+                    {run.status}
+                  </span>
+                </div>
+                <div class="run-detail text-xs text-muted">
+                  {run.sources_ok} sources OK · {run.sources_failed} failed
+                  {run.error_summary ? ` · ${run.error_summary}` : ""}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+
+    <!-- Manifest files -->
+    <section class="section-block">
+      <h2>Published data files</h2>
+      <p class="text-sm text-muted">Files in the current build's data manifest.</p>
+      {Object.keys(manifest.files).length === 0 ? (
+        <p class="text-sm text-muted">No files in manifest yet.</p>
+      ) : (
+        <table class="data-table" style="margin-top:var(--space-4)">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Size</th>
+              <th>SHA-256 (partial)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(manifest.files).map(([name, info]) => (
+              <tr>
+                <td class="text-mono text-sm">{name}</td>
+                <td class="text-mono text-sm">{(info.size_bytes / 1024).toFixed(1)} KB</td>
+                <td class="text-mono text-xs text-muted">{info.sha256.slice(0, 16)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+
+    <!-- Site changelog -->
+    <section class="section-block">
+      <h2>Site changelog</h2>
+      <div class="changelog-list">
+        {[
+          { date: "2026-10-03", version: "M7.0", note: "Site launch: all 8 pages, full design system, pipeline integration." },
+          { date: "2026-10-03", version: "M6.0", note: "Prediction ledger + models: ZeroModel, MomentumModel, RidgeCV. Immutable ledger with UUID + SHA-256." },
+          { date: "2026-10-03", version: "M5.0", note: "Evaluation engine: IC/Spearman, quintile returns, Fama-MacBeth, walk-forward + embargo, BH FDR." },
+          { date: "2026-10-03", version: "M4.0", note: "Feature pipeline: rolling z-scores, cross-sectional ranks, EB shrinkage. PREREGISTRATION.md locked." },
+          { date: "2026-10-03", version: "M3.0", note: "Signal collectors: Wikipedia, EDGAR, GDELT, Trends, FinBERT+VADER NLP." },
+          { date: "2026-10-03", version: "M2.0", note: "Universe + prices: SecurityMaster, Tiingo pipeline, first published JSON." },
+          { date: "2026-10-03", version: "M1.0", note: "Project scaffold, CI, security baseline, leakage tests." },
+        ].map((entry) => (
+          <div class="changelog-entry">
+            <div class="changelog-meta">
+              <span class="text-mono text-xs text-muted">{entry.date}</span>
+              <span class="badge badge-neutral text-xs">{entry.version}</span>
+            </div>
+            <p class="text-sm">{entry.note}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  </div>
+</Base>
+
+<style>
+  .page-container { padding-block: var(--space-12); }
+
+  .page-header {
+    max-width: var(--max-prose);
+    margin-bottom: var(--space-8);
+  }
+
+  .page-header h1 { margin-bottom: var(--space-4); }
+  .page-lede { font-size: var(--text-lg); color: var(--color-text-muted); }
+
+  /* Status banner */
+  .status-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    padding: var(--space-4) var(--space-6);
+    border-radius: var(--radius-md);
+    border: 1px solid;
+    margin-bottom: var(--space-8);
+    line-height: 1.5;
+  }
+
+  .status-ok      { background: var(--color-pos-bg);    border-color: var(--color-pos);    color: var(--color-pos); }
+  .status-degraded { background: var(--color-accent-bg); border-color: var(--color-accent); color: var(--color-accent); }
+  .status-error   { background: var(--color-neg-bg);    border-color: var(--color-neg);    color: var(--color-neg); }
+
+  .status-banner strong, .status-banner .text-sm { color: var(--color-text); }
+
+  .status-indicator { font-size: var(--text-xl); line-height: 1; flex-shrink: 0; }
+
+  /* Section blocks */
+  .section-block {
+    margin-bottom: var(--space-10);
+    border-top: 1px solid var(--color-border-subtle);
+    padding-top: var(--space-8);
+  }
+
+  .section-block h2 { margin-bottom: var(--space-4); }
+
+  .table-scroll { overflow-x: auto; }
+
+  /* Run list */
+  .runs-list { display: flex; flex-direction: column; gap: var(--space-2); }
+
+  .run-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--color-bg-subtle);
+    border: 1px solid var(--color-border-subtle);
+  }
+
+  .run-status-dot { font-size: var(--text-sm); flex-shrink: 0; }
+
+  .run-ok .run-status-dot    { color: var(--color-pos); }
+  .run-error .run-status-dot { color: var(--color-neg); }
+  .run-running .run-status-dot { color: var(--color-accent); }
+
+  .run-body { flex: 1; }
+
+  .run-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-1);
+  }
+
+  /* Changelog */
+  .changelog-list { display: flex; flex-direction: column; gap: var(--space-4); }
+
+  .changelog-entry {
+    display: grid;
+    grid-template-columns: 14rem 1fr;
+    gap: var(--space-4);
+    align-items: baseline;
+  }
+
+  @media (max-width: 40rem) {
+    .changelog-entry { grid-template-columns: 1fr; gap: var(--space-1); }
+  }
+
+  .changelog-meta {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+  }
+
+  .changelog-entry p { max-width: none; }
+</style>
