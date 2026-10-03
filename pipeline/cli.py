@@ -130,12 +130,24 @@ def _ingest(
 
 @app.command("features")
 def _features(
-    date: str | None = typer.Option(None, "--date"),
+    start: str | None = typer.Option(
+        None, "--start", help="Start date YYYY-MM-DD. Defaults to today."
+    ),
+    end: str | None = typer.Option(None, "--end", help="End date YYYY-MM-DD. Defaults to start."),
     data_repo: Path = typer.Option(DEFAULT_DATA_REPO, "--data-repo"),
+    lookback: int = typer.Option(60, "--lookback", help="Rolling window in calendar days."),
 ) -> None:
     """Construct signal features from raw archive (M4)."""
-    target = date or datetime.date.today().isoformat()
-    typer.echo(f"[features] Running for {target} — not yet implemented (M4)")
+    from pipeline.features.builder import FeatureBuilder
+
+    start_date = datetime.date.fromisoformat(start) if start else datetime.date.today()
+    end_date = datetime.date.fromisoformat(end) if end else start_date
+
+    typer.echo(f"[features] Building {start_date} – {end_date}, lookback={lookback}d")
+    builder = FeatureBuilder(data_repo_path=data_repo.resolve(), lookback_days=lookback)
+    summary = builder.build_range(start_date, end_date)
+    total = sum(summary.values())
+    typer.echo(f"[features] Done. {total:,} feature rows written.")
 
 
 @app.command("evaluate")

@@ -118,15 +118,12 @@ class EdgarSource(SourcePlugin):
                         tzinfo=UTC
                     )
             except (ValueError, IndexError):
-                accepted_dt = datetime(
-                    filing_date.year,
-                    filing_date.month,
-                    filing_date.day,
-                    16,
-                    30,
-                    0,
-                    tzinfo=UTC,  # estimate: 16:30 ET
-                )
+                # Fallback: use market_close_utc as a safe upper bound — a filing
+                # accepted at an unparseable time is treated as arriving at/after
+                # market close, which is the conservative (no-look-ahead) choice.
+                from pipeline.utils.calendar import market_close_utc
+
+                accepted_dt = market_close_utc(filing_date.isoformat())
 
             filings.append(
                 {

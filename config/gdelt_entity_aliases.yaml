@@ -62,7 +62,7 @@ aliases:
   SOFI:   {primary: '"SoFi Technologies" OR "SoFi"', ambiguous: false}
   GME:    {primary: '"GameStop"', ambiguous: false}
   AMC:    {primary: '"AMC Entertainment" OR "AMC theaters"', ambiguous: false}
-  MSTR:   {primary: '"Strategy" stock OR "MicroStrategy"', ambiguous: true}
+  MSTR:   {primary: '"MicroStrategy" OR "Strategy" company stock', ambiguous: true}
   RIVN:   {primary: '"Rivian"', ambiguous: false}
   LCID:   {primary: '"Lucid Group" OR "Lucid Motors"', ambiguous: false}
   IONQ:   {primary: '"IonQ"', ambiguous: false}

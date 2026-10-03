@@ -108,7 +108,6 @@ class SignalIngestor:
         data_repo_path: Path,
         config_dir: Path,
         use_finbert: bool = True,
-        tiingo_api_key: str | None = None,
     ) -> None:
         self.data_repo = data_repo_path
         self.config_dir = config_dir
@@ -240,7 +239,11 @@ class SignalIngestor:
         # NLP scoring (batch over all collected GDELT records)
         if gdelt_records_for_nlp:
             log.info("running NLP scoring", n_records=len(gdelt_records_for_nlp))
-            scored = self.nlp.score_gdelt_records(gdelt_records_for_nlp)
+            try:
+                scored = self.nlp.score_gdelt_records(gdelt_records_for_nlp)
+            except Exception as e:
+                log.error("NLP scoring failed; writing records without NLP scores", error=str(e))
+                scored = gdelt_records_for_nlp  # preserve records rather than drop them
             # Write scored records to archive
             # Group by ticker (from security_id lookup is complex; use source + security_id path)
             for record in scored:
