@@ -19,16 +19,13 @@ This document records every data source used by Lead/Lag Lab: its URL, terms/lic
 
 ## Price data
 
-### Stooq (primary)
+### Stooq
 - **URL:** https://stooq.com
-- **Terms:** https://stooq.com/  _(free data downloads; no explicit redistribution prohibition for derived statistics)_
-- **Status:** ⚠️ RESTRICTED
-- **What we store:** Daily OHLCV (adj. + raw close). Stored in private archive only.
-- **What we publish:** Derived statistics (returns, volatility) and charts. **Not** raw price files.
-- **Rate limit:** Download via CSV; no formal API. Throttle to 1 req/3s and cache aggressively.
-- **Notes:** Terms do not explicitly permit redistribution of raw price data, so we publish only derived statistics and interactive charts. Raw files stay in the private archive.
+- **Terms:** https://stooq.com/
+- **Status:** ❌ BLOCKED (automated access)
+- **Notes:** As of 2026-10-03, Stooq returns a Cloudflare JavaScript verification challenge for all automated CSV download requests, making it unusable for the pipeline without a headless browser. Removed from the source chain. Raw price data would not have been redistributable anyway; see Tiingo below for the replacement.
 
-### Tiingo (fallback)
+### Tiingo (primary price source)
 - **URL:** https://www.tiingo.com
 - **Terms:** https://www.tiingo.com/legal/terms-of-service
 - **Status:** ⚠️ RESTRICTED

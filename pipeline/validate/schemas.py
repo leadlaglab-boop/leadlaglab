@@ -118,10 +118,13 @@ PRICES_DAILY_SCHEMA = pa.schema([
     pa.field("high", pa.float64(), nullable=True),
     pa.field("low", pa.float64(), nullable=True),
     pa.field("close", pa.float64(), nullable=False),
-    pa.field("adj_close", pa.float64(), nullable=False),
+    # adj_close is nullable: Stooq provides unadjusted only; Tiingo fills adj_close
+    pa.field("adj_close", pa.float64(), nullable=True),
     pa.field("volume", pa.int64(), nullable=True),
     pa.field("observed_at", pa.timestamp("us", tz="UTC"), nullable=False),
     pa.field("source", pa.string(), nullable=False),
+    # "live" = fetched on the day; "backfilled" = fetched retrospectively
+    pa.field("data_type", pa.string(), nullable=False),
     pa.field("schema_version", pa.string(), nullable=False),
 ])
 

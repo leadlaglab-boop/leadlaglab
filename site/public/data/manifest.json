@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "built_at": "2026-10-03T07:33:13.758125+00:00",
+  "files": {
+    "prices_sample.json": {
+      "sha256": "346b3cc6b103aaa6",
+      "size_bytes": 68
+    },
+    "universe.json": {
+      "sha256": "86b18fee6056a0b9",
+      "size_bytes": 86557
+    }
+  }
+}
