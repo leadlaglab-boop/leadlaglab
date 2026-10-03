@@ -110,8 +110,7 @@ def _ingest(
     source_list = [s.strip() for s in sources.split(",")] if sources else None
 
     typer.echo(
-        f"[ingest] {start_date} – {end_date}, sources={source_list or 'all'}, "
-        f"data_type={data_type}"
+        f"[ingest] {start_date} – {end_date}, sources={source_list or 'all'}, data_type={data_type}"
     )
 
     ingestor = SignalIngestor(
