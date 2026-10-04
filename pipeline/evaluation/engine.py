@@ -103,6 +103,7 @@ def _load_eval_data(
     data_repo: Path,
     start: date,
     end: date,
+    prices_until: date | None = None,
 ) -> pd.DataFrame:
     """
     Load features and returns for [start, end] and join them.
@@ -120,7 +121,7 @@ def _load_eval_data(
         log.warning("engine.no_features", start=str(start), end=str(end))
         return pd.DataFrame()
 
-    returns = compute_excess_returns(data_repo, start=start, end=end)
+    returns = compute_excess_returns(data_repo, start=start, end=end, prices_until=prices_until)
     if returns.empty:
         log.warning("engine.no_returns", start=str(start), end=str(end))
         return pd.DataFrame()
