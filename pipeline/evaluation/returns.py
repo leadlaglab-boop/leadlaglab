@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -84,7 +85,7 @@ def compute_excess_returns(
         )
 
     # Daily log-returns for all tickers
-    log_ret = np.log(wide / wide.shift(1))  # shape (date, ticker)
+    log_ret = cast("pd.DataFrame", np.log(wide / wide.shift(1)))  # shape (date, ticker)
 
     # Trading-day index (NYSE calendar)
     try:
@@ -101,7 +102,7 @@ def compute_excess_returns(
 
     trading_day_pos = {d: i for i, d in enumerate(trading_days)}
 
-    records: list[dict] = []
+    records: list[dict[str, Any]] = []
     for d in sorted(d for d in wide.index if start <= d <= end):
         pos = trading_day_pos.get(d)
         if pos is None:

@@ -18,7 +18,7 @@ def is_market_holiday(date_str: str) -> bool:
         start_date=date_str,
         end_date=date_str,
     )
-    return schedule.empty
+    return bool(schedule.empty)
 
 
 def market_close_utc(date_str: str) -> datetime.datetime:

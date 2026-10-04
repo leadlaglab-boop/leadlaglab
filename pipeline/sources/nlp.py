@@ -59,7 +59,7 @@ class NLPScorer:
     def _load_vader(self) -> None:
         if self._vader is None:
             from vaderSentiment.vaderSentiment import (
-                SentimentIntensityAnalyzer,  # type: ignore[import-not-found]
+                SentimentIntensityAnalyzer,
             )
 
             self._vader = SentimentIntensityAnalyzer()
@@ -67,7 +67,7 @@ class NLPScorer:
     def _load_finbert(self) -> None:
         if self._pipeline is None and self._use_finbert:
             try:
-                from transformers import pipeline as hf_pipeline  # type: ignore[import-not-found]
+                from transformers import pipeline as hf_pipeline
 
                 log.info("loading FinBERT", model=self._finbert_model_name)
                 self._pipeline = hf_pipeline(

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import date
+from typing import Any
 
 import structlog
 
@@ -30,10 +31,10 @@ def fetch_ticker_dev(
     security_id: str,
     start: date,
     end: date,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Fetch prices via yfinance for development verification ONLY."""
     try:
-        import yfinance as yf  # type: ignore[import-not-found]
+        import yfinance as yf
     except ImportError:
         log.error("yfinance not installed. Run: uv add --dev yfinance")
         return []

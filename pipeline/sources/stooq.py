@@ -13,8 +13,10 @@ from __future__ import annotations
 import io
 import time
 from datetime import UTC, date, datetime
+from typing import Any
 
 import pandas as pd
+import pyarrow as pa
 import requests
 import structlog
 
@@ -49,7 +51,7 @@ class StooqPriceSource(SourcePlugin):
         security_id: str,
         date_range: DateRange,
         data_type: str = "backfilled",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Fetch OHLCV for one ticker. Returns list of price record dicts.
         Returns empty list if ticker is not found on Stooq or on error.
@@ -154,5 +156,5 @@ class StooqPriceSource(SourcePlugin):
         return len(records) > 0
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return PRICES_DAILY_SCHEMA

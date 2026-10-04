@@ -20,7 +20,7 @@ import hashlib
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, SupportsInt, cast
 
 import numpy as np
 import pandas as pd
@@ -394,7 +394,7 @@ def build_eval_results_json(
     ic_lookup: dict[tuple[str, str, int], list[dict[str, Any]]] = {}
     if not ic_df.empty:
         for (feature, cohort, horizon), grp in ic_df.groupby(["feature", "cohort", "horizon"]):
-            ic_lookup[(str(feature), str(cohort), int(horizon))] = [
+            ic_lookup[(str(feature), str(cohort), int(cast("SupportsInt", horizon)))] = [
                 {"date": str(row["date"]), "ic": _safe_float(row["ic"])}
                 for _, row in grp.sort_values("date").iterrows()
             ]
@@ -416,8 +416,8 @@ def build_eval_results_json(
                 else None
             )
             if q5 is not None and q1 is not None:
-                q_lookup[(str(feature), str(cohort), int(horizon))] = _safe_float(
-                    float(q5) - float(q1)
+                q_lookup[(str(feature), str(cohort), int(cast("SupportsInt", horizon)))] = (
+                    _safe_float(float(q5) - float(q1))
                 )
 
     # Pivot: one row per (feature, horizon, cohort) with IC + FMB stats

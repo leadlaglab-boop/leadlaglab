@@ -277,7 +277,7 @@ class SignalIngestor:
                 records = self.trends.fetch_tickers_batch(pairs, date_range, data_type)
                 if records:
                     # Group back by ticker
-                    ticker_records: dict[str, list[dict]] = {}
+                    ticker_records: dict[str, list[dict[str, Any]]] = {}
                     for r in records:
                         sm_row = active[active["security_id"] == r["security_id"]]
                         if sm_row.empty:

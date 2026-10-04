@@ -27,8 +27,9 @@ import json
 import time
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
+import pyarrow as pa
 import structlog
 
 from pipeline.sources.base import DateRange, SourcePlugin
@@ -57,7 +58,7 @@ class TrendsSource(SourcePlugin):
         payload = f"{','.join(sorted(tickers))}|{start}|{end}"
         return hashlib.md5(payload.encode()).hexdigest()
 
-    def _cache_get(self, key: str) -> dict | None:
+    def _cache_get(self, key: str) -> dict[str, Any] | None:
         if not self._cache_dir:
             return None
         path = self._cache_dir / f"trends_{key}.json"
@@ -68,9 +69,9 @@ class TrendsSource(SourcePlugin):
         if age_hours > CACHE_TTL_HOURS:
             path.unlink(missing_ok=True)
             return None
-        return data["payload"]
+        return cast("dict[str, Any]", data["payload"])
 
-    def _cache_set(self, key: str, payload: dict) -> None:
+    def _cache_set(self, key: str, payload: dict[str, Any]) -> None:
         if not self._cache_dir:
             return
         self._cache_dir.mkdir(parents=True, exist_ok=True)
@@ -98,7 +99,7 @@ class TrendsSource(SourcePlugin):
             return cached
 
         try:
-            from pytrends.request import TrendReq  # type: ignore[import-not-found]
+            from pytrends.request import TrendReq
         except ImportError:
             log.error("pytrends not installed")
             return None
@@ -232,5 +233,5 @@ class TrendsSource(SourcePlugin):
         return result is not None and "AAPL" in result
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return SIGNAL_RAW_SCHEMA

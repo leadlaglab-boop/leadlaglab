@@ -15,6 +15,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
+from typing import cast
 
 import pandas as pd
 import pyarrow as pa
@@ -194,4 +195,4 @@ def load_prices(
     if not parts:
         return pd.DataFrame()
 
-    return pa.concat_tables(parts).to_pandas()
+    return cast("pd.DataFrame", pa.concat_tables(parts).to_pandas())

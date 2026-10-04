@@ -65,7 +65,7 @@ class MomentumModel(BaseModel):
 
     def predict(self, X: pd.DataFrame) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self._MOM_COL in X.columns:
-            preds = X[self._MOM_COL].fillna(0).values * self._coef + self._intercept
+            preds = X[self._MOM_COL].fillna(0).to_numpy(dtype=float) * self._coef + self._intercept
         else:
             preds = np.zeros(len(X))
         ci_hw = 1.96 * getattr(self, "_y_std", _DEFAULT_CI_HALFWIDTH)

@@ -6,7 +6,7 @@ Schema version is embedded in every Parquet file and in manifest.json.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import pyarrow as pa
 from pydantic import BaseModel, Field
@@ -51,7 +51,7 @@ class SignalRaw(BaseModel):
     observed_at: datetime = Field(
         description="When we collected it; must be < market_close(decision_date)"
     )
-    payload: dict = Field(description="Source-specific typed fields")
+    payload: dict[str, Any] = Field(description="Source-specific typed fields")
     n_items: int = Field(description="Number of underlying items (articles, filings, etc.)")
     source_version: str
 

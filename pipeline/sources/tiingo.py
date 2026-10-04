@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, date, datetime
+from typing import Any
 
+import pyarrow as pa
 import requests
 import structlog
 
@@ -49,7 +51,7 @@ class TiingoPriceSource(SourcePlugin):
         security_id: str,
         date_range: DateRange,
         data_type: str = "backfilled",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         if not self.available:
             log.debug("tiingo: skipped (no API key)", ticker=ticker)
             return []
@@ -148,5 +150,5 @@ class TiingoPriceSource(SourcePlugin):
         return len(records) > 0
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return PRICES_DAILY_SCHEMA

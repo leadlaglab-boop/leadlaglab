@@ -16,7 +16,7 @@ import math
 import subprocess
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -37,7 +37,7 @@ LIVE_START_DATE = date(2026, 10, 3)
 def _load_json(path: Path) -> dict[str, Any]:
     """Load a JSON file; return empty dict if missing or unreadable."""
     try:
-        return json.loads(path.read_text())
+        return cast("dict[str, Any]", json.loads(path.read_text()))
     except Exception:
         return {}
 
