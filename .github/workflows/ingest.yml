@@ -2,9 +2,9 @@ name: Daily ingest
 
 on:
   schedule:
-    # 18:30 ET (23:30 UTC) — after US market close
+    # 18:30 ET (23:30 UTC) — after US market close: full run
     - cron: "30 23 * * 1-5"
-    # 08:00 ET (13:00 UTC) — morning catch-up run
+    # 08:00 ET (13:00 UTC) — morning catch-up: signal ingest only
     - cron: "0 13 * * 1-5"
   workflow_dispatch:
     inputs:
@@ -16,11 +16,19 @@ permissions:
   contents: write   # to commit to leadlaglab-data
   issues: write     # to open failure issues
 
+# Never let two runs push to the same repos at once
+concurrency:
+  group: daily-ingest
+  cancel-in-progress: false
+
 env:
   TIINGO_API_KEY: ${{ secrets.TIINGO_API_KEY }}
+  # Free tier is 50/hour; set the repo variable once on a paid tier
+  TIINGO_REQUESTS_PER_HOUR: ${{ vars.TIINGO_REQUESTS_PER_HOUR || '50' }}
   EDGAR_USER_AGENT: "LeadLagLab leadlaglab@gmail.com"
   FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
-  DATA_REPO_PATH: ../leadlaglab-data
+  # actions/checkout only writes inside the workspace, so the data repo lives here
+  DATA_REPO_PATH: leadlaglab-data
 
 jobs:
   ingest:
@@ -34,7 +42,7 @@ jobs:
         with:
           repository: leadlaglab-boop/leadlaglab-data
           token: ${{ secrets.DATA_REPO_TOKEN }}
-          path: ../leadlaglab-data
+          path: leadlaglab-data
 
       - name: Install uv
         uses: astral-sh/setup-uv@f0ec1fc3b38f5e7cd731bb6ce540c5af426746bb  # v4.2.0
@@ -44,42 +52,53 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Check market holiday
-        id: holiday_check
+      - name: Resolve run date
+        id: run
+        env:
+          DATE_OVERRIDE: ${{ github.event.inputs.date_override }}
+          IS_MORNING: ${{ github.event.schedule == '0 13 * * 1-5' }}
         run: |
-          IS_HOLIDAY=$(uv run python -c "
-          from pipeline.utils.calendar import is_market_holiday
-          import sys, datetime
-          d = '${{ github.event.inputs.date_override }}' or datetime.date.today().isoformat()
-          print('true' if is_market_holiday(d) else 'false')
-          ")
-          echo "is_holiday=$IS_HOLIDAY" >> $GITHUB_OUTPUT
-
-      - name: Run ingest pipeline
-        if: steps.holiday_check.outputs.is_holiday == 'false'
-        run: |
-          DATE_ARG=""
-          if [ -n "${{ github.event.inputs.date_override }}" ]; then
-            DATE_ARG="--date ${{ github.event.inputs.date_override }}"
+          RUN_DATE="${DATE_OVERRIDE:-$(date -u +%F)}"
+          if ! [[ "$RUN_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+            echo "::error::date_override must be YYYY-MM-DD, got '$RUN_DATE'"
+            exit 1
           fi
-          uv run lll-ingest $DATE_ARG
+          IS_HOLIDAY=$(uv run python -c "import sys; from pipeline.utils.calendar import is_market_holiday; print('true' if is_market_holiday(sys.argv[1]) else 'false')" "$RUN_DATE")
+          {
+            echo "date=$RUN_DATE"
+            # Wikipedia publishes a day's views the next day, and weekends have views
+            # too, so re-request the last few days; already-archived days are skipped.
+            echo "signal_start=$(date -u -d "$RUN_DATE - 4 days" +%F)"
+            # Re-fetch a week of prices so a missed run self-heals
+            echo "price_start=$(date -u -d "$RUN_DATE - 7 days" +%F)"
+            echo "is_holiday=$IS_HOLIDAY"
+            echo "full_run=$([ "$IS_MORNING" = "true" ] && echo false || echo true)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch prices
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
+        run: uv run lll-prices --start "${{ steps.run.outputs.price_start }}" --end "${{ steps.run.outputs.date }}" --live
+
+      - name: Run signal ingest
+        if: steps.run.outputs.is_holiday == 'false'
+        run: uv run lll-ingest --start "${{ steps.run.outputs.signal_start }}" --end "${{ steps.run.outputs.date }}" --live
 
       - name: Run feature pipeline
-        if: steps.holiday_check.outputs.is_holiday == 'false'
-        run: uv run lll-features
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
+        run: uv run lll-features --start "${{ steps.run.outputs.date }}"
 
       - name: Run evaluation engine
-        if: steps.holiday_check.outputs.is_holiday == 'false'
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
         run: uv run lll-evaluate
 
       - name: Run prediction ledger
-        if: steps.holiday_check.outputs.is_holiday == 'false'
-        run: uv run lll-predict
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
+        run: uv run lll-predict --date "${{ steps.run.outputs.date }}"
 
       - name: Commit data archive
-        if: steps.holiday_check.outputs.is_holiday == 'false'
+        if: steps.run.outputs.is_holiday == 'false'
+        working-directory: leadlaglab-data
         run: |
-          cd ../leadlaglab-data
           git config user.name "leadlaglab-bot"
           git config user.email "leadlaglab@gmail.com"
           git add -A
@@ -87,15 +106,16 @@ jobs:
             echo "No new data to commit"
           else
             git commit -m "data: $(date -u '+%Y-%m-%d %H:%M UTC') ingest"
+            git pull --rebase
             git push
           fi
 
       - name: Build and publish site data
-        if: steps.holiday_check.outputs.is_holiday == 'false'
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
         run: uv run lll-build-site
 
       - name: Commit and push site data
-        if: steps.holiday_check.outputs.is_holiday == 'false'
+        if: steps.run.outputs.is_holiday == 'false' && steps.run.outputs.full_run == 'true'
         run: |
           git config user.name "leadlaglab-bot"
           git config user.email "leadlaglab@gmail.com"
@@ -104,12 +124,13 @@ jobs:
             echo "No site data changes to commit"
           else
             git commit -m "data: $(date -u '+%Y-%m-%d') site JSON rebuild"
+            git pull --rebase
             git push
           fi
 
       - name: Monitor archive size
         run: |
-          SIZE_MB=$(du -sm ../leadlaglab-data | cut -f1)
+          SIZE_MB=$(du -sm leadlaglab-data | cut -f1)
           echo "Archive size: ${SIZE_MB} MB"
           if [ "$SIZE_MB" -gt 600 ]; then
             echo "::warning::Archive size ${SIZE_MB} MB exceeds 600 MB threshold. Consider migrating to R2."

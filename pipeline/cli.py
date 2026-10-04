@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import sys
 from pathlib import Path
 
 import typer
@@ -48,6 +49,7 @@ def _prices(
     live: bool = typer.Option(False, "--live", help="Mark as live data (default: backfilled)"),
 ) -> None:
     """Fetch and archive price data for the universe."""
+    from pipeline.evaluation.returns import BENCHMARK_SECURITY_ID, BENCHMARK_TICKER
     from pipeline.sources.base import DateRange
     from pipeline.sources.prices import PriceIngestor
     from pipeline.universe.security_master import get_active_tickers, load_security_master
@@ -64,9 +66,14 @@ def _prices(
     else:
         ticker_list = get_active_tickers(sm)
 
-    # Build (ticker, security_id) pairs
+    # Build (ticker, security_id) pairs; one per ticker even if it sits in both cohorts
     active = sm[sm["valid_to"].isna() & sm["ticker"].isin(ticker_list)]
+    active = active.drop_duplicates("ticker")
     pairs = list(zip(active["ticker"], active["security_id"], strict=False))
+
+    # The benchmark is not in the SecurityMaster but every excess return needs it
+    if BENCHMARK_TICKER not in {t for t, _ in pairs}:
+        pairs.append((BENCHMARK_TICKER, BENCHMARK_SECURITY_ID))
 
     typer.echo(f"Fetching prices for {len(pairs)} tickers ({start_date} – {end_date})")
 
@@ -159,16 +166,21 @@ def _evaluate(
     fdr_q: float = typer.Option(0.05, "--fdr-q", help="BH FDR threshold"),
 ) -> None:
     """Run signal evaluation: IC, quintiles, Fama-MacBeth, walk-forward OOS, BH FDR."""
-    from pipeline.evaluation.engine import run_evaluation
+    from pipeline.evaluation.engine import NoEvalDataError, run_evaluation
 
     start_date = datetime.date.fromisoformat(start)
     end_date = datetime.date.fromisoformat(end) if end else datetime.date.today()
-    out_dir = run_evaluation(
-        data_repo=data_repo.resolve(),
-        start=start_date,
-        end=end_date,
-        fdr_q=fdr_q,
-    )
+    try:
+        out_dir = run_evaluation(
+            data_repo=data_repo.resolve(),
+            start=start_date,
+            end=end_date,
+            fdr_q=fdr_q,
+        )
+    except NoEvalDataError as e:
+        # Expected until features and prices have accumulated; not a pipeline failure
+        typer.echo(f"[evaluate] Skipped: {e}")
+        return
     typer.echo(f"[evaluate] Results written to {out_dir}")
 
 
@@ -230,30 +242,39 @@ def _monthly_report(
     typer.echo(summary)
 
 
-# pyproject.toml [project.scripts] entrypoints
+# pyproject.toml [project.scripts] entrypoints.
+# Each forwards the process's own CLI args, so `lll-ingest --start X --live` works.
+def _run(command: str) -> None:
+    app([command, *sys.argv[1:]], standalone_mode=True)
+
+
 def universe() -> None:
-    app(["universe"], standalone_mode=True)
+    _run("universe")
+
+
+def prices() -> None:
+    _run("prices")
 
 
 def ingest() -> None:
-    app(["ingest"], standalone_mode=True)
+    _run("ingest")
 
 
 def features() -> None:
-    app(["features"], standalone_mode=True)
+    _run("features")
 
 
 def evaluate() -> None:
-    app(["evaluate"], standalone_mode=True)
+    _run("evaluate")
 
 
 def predict() -> None:
-    app(["predict"], standalone_mode=True)
+    _run("predict")
 
 
 def build_site() -> None:
-    app(["build-site"], standalone_mode=True)
+    _run("build-site")
 
 
 def monthly_report() -> None:
-    app(["monthly-report"], standalone_mode=True)
+    _run("monthly-report")

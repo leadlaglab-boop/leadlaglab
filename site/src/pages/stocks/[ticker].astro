@@ -56,12 +56,12 @@ const ticker = security.ticker;
     <!-- Price vs signal chart -->
     <section class="section-block">
       <h2>Price history</h2>
-      <p class="text-sm text-muted">Adjusted close (source: Tiingo, derived stats only).</p>
+      <p class="text-sm text-muted">Price index, rebased to 100 at the start of the window (from Tiingo adjusted closes).</p>
       <div id="price-chart" class="chart-wrap chart-placeholder" aria-label="Price history chart">
         <span class="text-muted text-sm">Loading price data…</span>
         <noscript>Enable JavaScript to view charts.</noscript>
       </div>
-      <p class="chart-caption">Adjusted close. Not for redistribution per Tiingo terms.</p>
+      <p class="chart-caption">Rebased index, not raw prices: Tiingo's terms prohibit redistributing raw price data.</p>
     </section>
 
     <!-- Prediction history -->
@@ -107,7 +107,7 @@ const ticker = security.ticker;
         const plotW = w - pad.left - pad.right;
         const plotH = h - pad.top - pad.bottom;
 
-        const prices = series.map((d) => d.adj_close);
+        const prices = series.map((d) => d.index);
         const minP = Math.min(...prices);
         const maxP = Math.max(...prices);
         const rangeP = maxP - minP || 1;
@@ -115,7 +115,7 @@ const ticker = security.ticker;
         const xScale = (i) => pad.left + (i / (prices.length - 1)) * plotW;
         const yScale = (v) => pad.top + (1 - (v - minP) / rangeP) * plotH;
 
-        const linePoints = series.map((d, i) => `${xScale(i)},${yScale(d.adj_close)}`).join(" ");
+        const linePoints = series.map((d, i) => `${xScale(i)},${yScale(d.index)}`).join(" ");
         const areaPoints = `${pad.left},${h - pad.bottom} ${linePoints} ${w - pad.right},${h - pad.bottom}`;
 
         const xTickEvery = Math.max(1, Math.floor(series.length / 5));
@@ -125,12 +125,12 @@ const ticker = security.ticker;
         );
 
         const svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Price history for ${tickerUpper}">
-          <title>Adjusted close price for ${tickerUpper}</title>
+          <title>Rebased price index for ${tickerUpper}</title>
           <polygon points="${areaPoints}" fill="var(--color-accent-bg)" opacity="0.6"/>
           <polyline points="${linePoints}" fill="none" stroke="var(--color-accent)" stroke-width="1.5" stroke-linejoin="round"/>
           ${yTickValues.map((v) => `
             <text x="${pad.left - 6}" y="${yScale(v) + 4}" text-anchor="end"
-              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">$${v.toFixed(0)}</text>
+              font-family="var(--font-mono)" font-size="10" fill="var(--color-text-faint)">${v.toFixed(0)}</text>
             <line x1="${pad.left}" y1="${yScale(v)}" x2="${w - pad.right}" y2="${yScale(v)}"
               stroke="var(--color-border)" stroke-width="0.5" stroke-dasharray="3,3"/>
           `).join("")}

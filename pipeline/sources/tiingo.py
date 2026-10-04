@@ -12,6 +12,7 @@ Terms: https://www.tiingo.com/legal/terms-of-service
 from __future__ import annotations
 
 import os
+import time
 from datetime import UTC, date, datetime
 from typing import Any
 
@@ -26,15 +27,21 @@ from pipeline.validate.schemas import PRICES_DAILY_SCHEMA, SCHEMA_VERSION
 log = structlog.get_logger()
 
 TIINGO_BASE = "https://api.tiingo.com/tiingo/daily/{ticker}/prices"
+DEFAULT_REQUESTS_PER_HOUR = 50
 
 
 class TiingoPriceSource(SourcePlugin):
     name = "tiingo"
     terms_url = "https://www.tiingo.com/legal/terms-of-service"
-    rate_limit_per_second = 0.8  # stay under 50/hour = ~0.014/s; 0.8/s is fine within daily cap
+    # Requests/hour comes from TIINGO_REQUESTS_PER_HOUR (default: free tier's 50/hour).
+    # Raise it once on a paid tier; at 50/hour a full-universe run takes ~10 hours.
+    rate_limit_per_second = DEFAULT_REQUESTS_PER_HOUR / 3600
 
     def __init__(self, api_key: str | None = None) -> None:
         self._api_key = api_key or os.getenv("TIINGO_API_KEY")
+        per_hour = float(os.getenv("TIINGO_REQUESTS_PER_HOUR") or DEFAULT_REQUESTS_PER_HOUR)
+        self.rate_limit_per_second = per_hour / 3600
+        self._last_request_time: float = 0.0
         if not self._api_key:
             log.warning(
                 "TIINGO_API_KEY not set; Tiingo source unavailable. "
@@ -44,6 +51,13 @@ class TiingoPriceSource(SourcePlugin):
     @property
     def available(self) -> bool:
         return bool(self._api_key)
+
+    def _throttle(self) -> None:
+        min_interval = 1.0 / self.rate_limit_per_second
+        elapsed = time.monotonic() - self._last_request_time
+        if self._last_request_time and elapsed < min_interval:
+            time.sleep(min_interval - elapsed)
+        self._last_request_time = time.monotonic()
 
     def fetch_ticker(
         self,
@@ -64,6 +78,7 @@ class TiingoPriceSource(SourcePlugin):
             "token": self._api_key,
         }
 
+        self._throttle()
         try:
             resp = requests.get(url, params=params, timeout=20)
         except requests.RequestException as e:

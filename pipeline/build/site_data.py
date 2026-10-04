@@ -4,7 +4,7 @@ These are the files the Astro site reads at runtime.
 
 Published:
   - universe.json: all securities with ticker, name, sector, cohort
-  - prices_sample.json: last 90 days of prices for a sample of tickers (for demo charts)
+  - prices_sample.json: last 90 days of a rebased price index for sample tickers
   - signals_summary.json: per-(feature, horizon, cohort) IC and FMB summary statistics
   - ic_series.json: per-(feature, horizon, cohort, date) rolling IC values
   - quintile_returns.json: per-(feature, horizon, cohort, quintile) mean excess returns
@@ -82,8 +82,11 @@ def build_prices_sample_json(
     lookback_days: int = 90,
 ) -> dict[str, Any]:
     """
-    Generate prices_sample.json — last N days of close prices for sample tickers.
-    Only close and adj_close (where available); no raw OHLCV in published JSON.
+    Generate prices_sample.json — last N days of a rebased price index for sample tickers.
+
+    Each series is adj_close (close where adj_close is missing) divided by its first
+    value in the window, times 100. Raw vendor prices are never published: Tiingo's
+    terms prohibit redistributing them, and a rebased index is derived data.
     """
     end = date.today()
     start = date.fromordinal(end.toordinal() - lookback_days)
@@ -97,33 +100,32 @@ def build_prices_sample_json(
         return out
 
     prices["date"] = pd.to_datetime(prices["date"]).dt.date
+    prices["price"] = prices["adj_close"].fillna(prices["close"])
 
     series: dict[str, list[dict[str, Any]]] = {}
-    for ticker_upper in SAMPLE_TICKERS:
-        ticker_rows = prices[
-            prices["security_id"].str.upper().isin([ticker_upper])
-            | (prices.get("ticker", "") == ticker_upper)
-        ]
-        if ticker_rows.empty:
+    for ticker in SAMPLE_TICKERS:
+        rows = (
+            prices[prices["ticker"] == ticker]
+            .dropna(subset=["price"])
+            .sort_values("observed_at")
+            .drop_duplicates("date", keep="last")
+            .sort_values("date")
+        )
+        if rows.empty:
             continue
-
-        series[ticker_upper] = [
-            {
-                "date": row["date"].isoformat(),
-                "close": round(float(row["close"]), 4),
-                "adj_close": round(float(row["adj_close"]), 4)
-                if pd.notna(row.get("adj_close"))
-                else None,
-                "data_type": row.get("data_type", "unknown"),
-            }
-            for _, row in ticker_rows.sort_values("date").iterrows()
+        base = float(rows["price"].iloc[0])
+        if base <= 0:
+            continue
+        series[ticker] = [
+            {"date": d.isoformat(), "index": round(float(p) / base * 100, 2)}
+            for d, p in zip(rows["date"], rows["price"], strict=True)
         ]
 
     out = {
         "as_of": end.isoformat(),
         "lookback_days": lookback_days,
         "tickers": SAMPLE_TICKERS,
-        "note": "close and adj_close only; raw OHLCV not published per vendor terms",
+        "note": "rebased price index (first day in window = 100); raw prices not published per vendor terms",
         "series": series,
     }
 
