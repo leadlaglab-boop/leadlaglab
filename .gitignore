@@ -42,6 +42,8 @@ site/.astro/
 *.parquet
 *.arrow
 data/raw/
+# CI checks the data repo out inside the workspace (see ingest.yml)
+/leadlaglab-data/
 
 # Secrets — belt and suspenders; gitleaks is the real guard
 *.pem

@@ -25,6 +25,8 @@ log = structlog.get_logger()
 
 HORIZONS = (1, 5, 21)  # trading days
 BENCHMARK_TICKER = "SPY"
+# SPY has no SecurityMaster row; this fixed id tags its archived price rows
+BENCHMARK_SECURITY_ID = "benchmark_spy"
 
 
 def _load_wide_adj_close(data_repo: Path, start: date, end: date) -> pd.DataFrame:

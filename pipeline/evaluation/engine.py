@@ -46,6 +46,11 @@ log = structlog.get_logger()
 HORIZONS = (1, 5, 21)
 FEATURE_VERSION = "v1"
 
+
+class NoEvalDataError(RuntimeError):
+    """Raised when there is not yet any joined feature+return data to evaluate."""
+
+
 # Output schemas
 EVAL_RESULTS_SCHEMA = pa.schema(
     [
@@ -304,7 +309,7 @@ def run_evaluation(
 
     data = _load_eval_data(data_repo, eval_start, eval_end)
     if data.empty:
-        raise RuntimeError("No feature+return data assembled. Run features and prices first.")
+        raise NoEvalDataError("No feature+return data assembled. Run features and prices first.")
 
     all_rows: list[dict[str, Any]] = []
     ic_series_rows: list[dict[str, Any]] = []

@@ -2,9 +2,11 @@
 Price ingestion orchestrator.
 
 Strategy:
-  1. Try Stooq (no key required; gives raw OHLCV, adj_close=None)
-  2. If Tiingo key is set, fetch adj_close from Tiingo and merge it in
-  3. Store merged records in the archive
+  1. Tiingo (primary; needs TIINGO_API_KEY): OHLCV + adj_close
+  2. Stooq (fallback when Tiingo has no key or returns nothing): raw OHLCV,
+     adj_close=None. Stooq currently serves a Cloudflare challenge to automated
+     clients, so in practice this fallback usually returns nothing too.
+  3. Store records in the archive
 
 Records are written as Parquet, partitioned by source/year/month/day.
 Idempotent: re-running for the same date range is safe (will overwrite the partition).
@@ -15,7 +17,7 @@ from __future__ import annotations
 import re
 from datetime import date
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -51,26 +53,17 @@ class PriceIngestor:
         Fetch prices for one ticker, merge sources, and write to archive.
         Returns number of records written.
         """
-        # Step 1: Stooq (raw OHLCV)
-        records = self.stooq.fetch_ticker(ticker, security_id, date_range, data_type)
+        records: list[dict[str, Any]] = []
+        if self.tiingo.available:
+            records = self.tiingo.fetch_ticker(ticker, security_id, date_range, data_type)
+        if not records:
+            records = self.stooq.fetch_ticker(ticker, security_id, date_range, data_type)
 
         if not records:
-            log.warning("no data from stooq", ticker=ticker)
+            log.warning("no price data from any source", ticker=ticker)
             return 0
 
         df = pd.DataFrame(records)
-
-        # Step 2: Tiingo adj_close overlay (if key is available)
-        if self.tiingo.available:
-            tiingo_records = self.tiingo.fetch_ticker(ticker, security_id, date_range, data_type)
-            if tiingo_records:
-                tdf = pd.DataFrame(tiingo_records)[["date", "adj_close"]].rename(
-                    columns={"adj_close": "adj_close_tiingo"}
-                )
-                df = df.merge(tdf, on="date", how="left")
-                # Prefer Tiingo adj_close where available
-                df["adj_close"] = df["adj_close_tiingo"].combine_first(df["adj_close"])
-                df = df.drop(columns=["adj_close_tiingo"])
 
         # Write partitioned by year/month/day of the price date
         # (not observed_at; price date is the natural partition key)
@@ -190,7 +183,11 @@ def load_prices(
             if file_ticker not in [t.upper() for t in tickers]:
                 continue
 
-        parts.append(pq.read_table(parquet_file))
+        # The ticker lives only in the filename; attach it so callers can pivot by ticker
+        table = pq.read_table(parquet_file)
+        parts.append(
+            table.append_column("ticker", pa.array([parquet_file.stem.upper()] * table.num_rows))
+        )
 
     if not parts:
         return pd.DataFrame()

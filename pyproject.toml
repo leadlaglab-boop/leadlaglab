@@ -52,6 +52,8 @@ dev = [
 ]
 
 [project.scripts]
+lll-universe = "pipeline.cli:universe"
+lll-prices = "pipeline.cli:prices"
 lll-ingest = "pipeline.cli:ingest"
 lll-features = "pipeline.cli:features"
 lll-evaluate = "pipeline.cli:evaluate"
