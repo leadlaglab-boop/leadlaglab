@@ -6,7 +6,7 @@ Schema version is embedded in every Parquet file and in manifest.json.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Any, Literal
 
 import pyarrow as pa
 from pydantic import BaseModel, Field
@@ -47,13 +47,11 @@ class PricesDaily(BaseModel):
 class SignalRaw(BaseModel):
     source: str
     security_id: str
-    effective_date: date = Field(
-        description="The period this observation describes"
-    )
+    effective_date: date = Field(description="The period this observation describes")
     observed_at: datetime = Field(
         description="When we collected it; must be < market_close(decision_date)"
     )
-    payload: dict = Field(description="Source-specific typed fields")
+    payload: dict[str, Any] = Field(description="Source-specific typed fields")
     n_items: int = Field(description="Number of underlying items (articles, filings, etc.)")
     source_version: str
 
@@ -100,79 +98,91 @@ class Outcome(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-SECURITY_MASTER_SCHEMA = pa.schema([
-    pa.field("security_id", pa.string(), nullable=False),
-    pa.field("ticker", pa.string(), nullable=False),
-    pa.field("valid_from", pa.date32(), nullable=False),
-    pa.field("valid_to", pa.date32(), nullable=True),
-    pa.field("name", pa.string(), nullable=False),
-    pa.field("gics_sector", pa.string(), nullable=False),
-    pa.field("cohort", pa.string(), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+SECURITY_MASTER_SCHEMA = pa.schema(
+    [
+        pa.field("security_id", pa.string(), nullable=False),
+        pa.field("ticker", pa.string(), nullable=False),
+        pa.field("valid_from", pa.date32(), nullable=False),
+        pa.field("valid_to", pa.date32(), nullable=True),
+        pa.field("name", pa.string(), nullable=False),
+        pa.field("gics_sector", pa.string(), nullable=False),
+        pa.field("cohort", pa.string(), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)
 
-PRICES_DAILY_SCHEMA = pa.schema([
-    pa.field("security_id", pa.string(), nullable=False),
-    pa.field("date", pa.date32(), nullable=False),
-    pa.field("open", pa.float64(), nullable=True),
-    pa.field("high", pa.float64(), nullable=True),
-    pa.field("low", pa.float64(), nullable=True),
-    pa.field("close", pa.float64(), nullable=False),
-    # adj_close is nullable: Stooq provides unadjusted only; Tiingo fills adj_close
-    pa.field("adj_close", pa.float64(), nullable=True),
-    pa.field("volume", pa.int64(), nullable=True),
-    pa.field("observed_at", pa.timestamp("us", tz="UTC"), nullable=False),
-    pa.field("source", pa.string(), nullable=False),
-    # "live" = fetched on the day; "backfilled" = fetched retrospectively
-    pa.field("data_type", pa.string(), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+PRICES_DAILY_SCHEMA = pa.schema(
+    [
+        pa.field("security_id", pa.string(), nullable=False),
+        pa.field("date", pa.date32(), nullable=False),
+        pa.field("open", pa.float64(), nullable=True),
+        pa.field("high", pa.float64(), nullable=True),
+        pa.field("low", pa.float64(), nullable=True),
+        pa.field("close", pa.float64(), nullable=False),
+        # adj_close is nullable: Stooq provides unadjusted only; Tiingo fills adj_close
+        pa.field("adj_close", pa.float64(), nullable=True),
+        pa.field("volume", pa.int64(), nullable=True),
+        pa.field("observed_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        pa.field("source", pa.string(), nullable=False),
+        # "live" = fetched on the day; "backfilled" = fetched retrospectively
+        pa.field("data_type", pa.string(), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)
 
-SIGNAL_RAW_SCHEMA = pa.schema([
-    pa.field("source", pa.string(), nullable=False),
-    pa.field("security_id", pa.string(), nullable=False),
-    pa.field("effective_date", pa.date32(), nullable=False),
-    pa.field("observed_at", pa.timestamp("us", tz="UTC"), nullable=False),
-    pa.field("payload_json", pa.string(), nullable=False),  # serialized payload
-    pa.field("n_items", pa.int32(), nullable=False),
-    pa.field("source_version", pa.string(), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+SIGNAL_RAW_SCHEMA = pa.schema(
+    [
+        pa.field("source", pa.string(), nullable=False),
+        pa.field("security_id", pa.string(), nullable=False),
+        pa.field("effective_date", pa.date32(), nullable=False),
+        pa.field("observed_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        pa.field("payload_json", pa.string(), nullable=False),  # serialized payload
+        pa.field("n_items", pa.int32(), nullable=False),
+        pa.field("source_version", pa.string(), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)
 
-SIGNAL_FEATURE_SCHEMA = pa.schema([
-    pa.field("security_id", pa.string(), nullable=False),
-    pa.field("date", pa.date32(), nullable=False),
-    pa.field("feature_name", pa.string(), nullable=False),
-    pa.field("value", pa.float64(), nullable=True),
-    pa.field("rank_cs", pa.float64(), nullable=True),
-    pa.field("z_cs", pa.float64(), nullable=True),
-    pa.field("n_obs", pa.int32(), nullable=False),
-    pa.field("shrunk_value", pa.float64(), nullable=True),
-    pa.field("feature_version", pa.string(), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+SIGNAL_FEATURE_SCHEMA = pa.schema(
+    [
+        pa.field("security_id", pa.string(), nullable=False),
+        pa.field("date", pa.date32(), nullable=False),
+        pa.field("feature_name", pa.string(), nullable=False),
+        pa.field("value", pa.float64(), nullable=True),
+        pa.field("rank_cs", pa.float64(), nullable=True),
+        pa.field("z_cs", pa.float64(), nullable=True),
+        pa.field("n_obs", pa.int32(), nullable=False),
+        pa.field("shrunk_value", pa.float64(), nullable=True),
+        pa.field("feature_version", pa.string(), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)
 
-PREDICTION_LEDGER_SCHEMA = pa.schema([
-    pa.field("prediction_id", pa.string(), nullable=False),
-    pa.field("made_at", pa.timestamp("us", tz="UTC"), nullable=False),
-    pa.field("security_id", pa.string(), nullable=False),
-    pa.field("target_date_start", pa.date32(), nullable=False),
-    pa.field("target_date_end", pa.date32(), nullable=False),
-    pa.field("horizon_days", pa.int32(), nullable=False),
-    pa.field("model_id", pa.string(), nullable=False),
-    pa.field("model_version", pa.string(), nullable=False),
-    pa.field("data_hash", pa.string(), nullable=False),
-    pa.field("predicted_excess_return", pa.float64(), nullable=False),
-    pa.field("predicted_direction", pa.int8(), nullable=False),
-    pa.field("ci_lower", pa.float64(), nullable=False),
-    pa.field("ci_upper", pa.float64(), nullable=False),
-    pa.field("features_used_json", pa.string(), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+PREDICTION_LEDGER_SCHEMA = pa.schema(
+    [
+        pa.field("prediction_id", pa.string(), nullable=False),
+        pa.field("made_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        pa.field("security_id", pa.string(), nullable=False),
+        pa.field("target_date_start", pa.date32(), nullable=False),
+        pa.field("target_date_end", pa.date32(), nullable=False),
+        pa.field("horizon_days", pa.int32(), nullable=False),
+        pa.field("model_id", pa.string(), nullable=False),
+        pa.field("model_version", pa.string(), nullable=False),
+        pa.field("data_hash", pa.string(), nullable=False),
+        pa.field("predicted_excess_return", pa.float64(), nullable=False),
+        pa.field("predicted_direction", pa.int8(), nullable=False),
+        pa.field("ci_lower", pa.float64(), nullable=False),
+        pa.field("ci_upper", pa.float64(), nullable=False),
+        pa.field("features_used_json", pa.string(), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)
 
-OUTCOME_SCHEMA = pa.schema([
-    pa.field("prediction_id", pa.string(), nullable=False),
-    pa.field("realized_excess_return", pa.float64(), nullable=False),
-    pa.field("scored_at", pa.timestamp("us", tz="UTC"), nullable=False),
-    pa.field("schema_version", pa.string(), nullable=False),
-])
+OUTCOME_SCHEMA = pa.schema(
+    [
+        pa.field("prediction_id", pa.string(), nullable=False),
+        pa.field("realized_excess_return", pa.float64(), nullable=False),
+        pa.field("scored_at", pa.timestamp("us", tz="UTC"), nullable=False),
+        pa.field("schema_version", pa.string(), nullable=False),
+    ]
+)

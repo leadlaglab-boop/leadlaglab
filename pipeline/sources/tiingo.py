@@ -12,8 +12,10 @@ Terms: https://www.tiingo.com/legal/terms-of-service
 from __future__ import annotations
 
 import os
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+from typing import Any
 
+import pyarrow as pa
 import requests
 import structlog
 
@@ -49,7 +51,7 @@ class TiingoPriceSource(SourcePlugin):
         security_id: str,
         date_range: DateRange,
         data_type: str = "backfilled",
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         if not self.available:
             log.debug("tiingo: skipped (no API key)", ticker=ticker)
             return []
@@ -90,7 +92,7 @@ class TiingoPriceSource(SourcePlugin):
             log.debug("tiingo: no data", ticker=ticker, response=str(data)[:200])
             return []
 
-        fetch_time = datetime.now(tz=timezone.utc)
+        fetch_time = datetime.now(tz=UTC)
         records = []
         for item in data:
             try:
@@ -138,6 +140,7 @@ class TiingoPriceSource(SourcePlugin):
         if not self.available:
             return False
         import datetime
+
         today = datetime.date.today()
         records = self.fetch_ticker(
             "AAPL",
@@ -147,5 +150,5 @@ class TiingoPriceSource(SourcePlugin):
         return len(records) > 0
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return PRICES_DAILY_SCHEMA

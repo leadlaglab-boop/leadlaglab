@@ -27,8 +27,10 @@ from __future__ import annotations
 import json
 import time
 from datetime import UTC, date, datetime, timedelta
-from typing import Any
+from pathlib import Path
+from typing import Any, cast
 
+import pyarrow as pa
 import requests
 import structlog
 import yaml
@@ -48,10 +50,10 @@ class GdeltSource(SourcePlugin):
     terms_url = "https://www.gdeltproject.org/about.html#termsofuse"
     rate_limit_per_second = 0.5  # be conservative; no documented limit but it's shared infra
 
-    def __init__(self, aliases_path: "Path") -> None:  # type: ignore[name-defined]  # noqa
+    def __init__(self, aliases_path: Path) -> None:
         with open(aliases_path) as f:
             cfg = yaml.safe_load(f)
-        self._aliases: dict[str, dict] = cfg.get("aliases", {})
+        self._aliases: dict[str, dict[str, Any]] = cfg.get("aliases", {})
         self._last_req: float = 0.0
 
     def _throttle(self) -> None:
@@ -61,7 +63,7 @@ class GdeltSource(SourcePlugin):
             time.sleep(gap - elapsed)
         self._last_req = time.monotonic()
 
-    def _get(self, params: dict[str, str]) -> dict | None:
+    def _get(self, params: dict[str, str]) -> dict[str, Any] | None:
         self._throttle()
         try:
             resp = requests.get(
@@ -77,14 +79,14 @@ class GdeltSource(SourcePlugin):
             log.warning("gdelt: unexpected status", status=resp.status_code)
             return None
         try:
-            return resp.json()
+            return cast("dict[str, Any]", resp.json())
         except ValueError:
             return None
 
     def _query_for_ticker(self, ticker: str) -> str | None:
         """Get the GDELT search query for this ticker."""
         if ticker in self._aliases:
-            return self._aliases[ticker]["primary"]
+            return cast("str", self._aliases[ticker]["primary"])
         return None
 
     def fetch_ticker_day(
@@ -120,7 +122,7 @@ class GdeltSource(SourcePlugin):
             }
         )
 
-        articles: list[dict] = []
+        articles: list[dict[str, Any]] = []
         if artlist_data and "articles" in artlist_data:
             for art in artlist_data["articles"]:
                 articles.append(
@@ -222,5 +224,5 @@ class GdeltSource(SourcePlugin):
         return result is not None
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return SIGNAL_RAW_SCHEMA

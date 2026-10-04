@@ -1,6 +1,6 @@
 # Lead/Lag Lab — Pre-Registration
 
-**Status: DRAFT — Ella must review and approve before M5 evaluation code runs.**
+**Status: PENDING OWNER REVIEW — owner has not yet reviewed or approved this pre-registration. See study/AMENDMENTS.md A001.**
 
 Pre-registration date: 2026-10-03
 Site: [leadlaglab.com](https://leadlaglab.com)

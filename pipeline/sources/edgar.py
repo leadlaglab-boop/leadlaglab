@@ -21,8 +21,9 @@ from __future__ import annotations
 import json
 import time
 from datetime import UTC, date, datetime
-from typing import Any
+from typing import Any, cast
 
+import pyarrow as pa
 import requests
 import structlog
 
@@ -49,7 +50,7 @@ class EdgarSource(SourcePlugin):
 
     def __init__(self) -> None:
         self._last_req: float = 0.0
-        self._submissions_cache: dict[str, dict] = {}
+        self._submissions_cache: dict[str, dict[str, Any]] = {}
 
     def _throttle(self) -> None:
         gap = 1.0 / self.rate_limit_per_second
@@ -58,7 +59,7 @@ class EdgarSource(SourcePlugin):
             time.sleep(gap - elapsed)
         self._last_req = time.monotonic()
 
-    def _get(self, url: str) -> dict | None:
+    def _get(self, url: str) -> dict[str, Any] | None:
         self._throttle()
         try:
             resp = requests.get(url, headers=EDGAR_HEADERS, timeout=20)
@@ -71,11 +72,11 @@ class EdgarSource(SourcePlugin):
             log.warning("edgar: unexpected status", url=url[:80], status=resp.status_code)
             return None
         try:
-            return resp.json()
+            return cast("dict[str, Any]", resp.json())
         except ValueError:
             return None
 
-    def _get_submissions(self, cik: str) -> dict | None:
+    def _get_submissions(self, cik: str) -> dict[str, Any] | None:
         """Fetch company submission data from EDGAR (cached per session)."""
         if cik in self._submissions_cache:
             return self._submissions_cache[cik]
@@ -85,7 +86,9 @@ class EdgarSource(SourcePlugin):
             self._submissions_cache[cik] = data
         return data
 
-    def _extract_filings(self, submissions: dict, start: date, end: date) -> list[dict[str, Any]]:
+    def _extract_filings(
+        self, submissions: dict[str, Any], start: date, end: date
+    ) -> list[dict[str, Any]]:
         """
         Extract Form 4 and 8-K filings within [start, end] from submissions data.
         Returns list of filing dicts.
@@ -225,5 +228,5 @@ class EdgarSource(SourcePlugin):
         return True  # returns True even if no filings in period; just checks API works
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return SIGNAL_RAW_SCHEMA

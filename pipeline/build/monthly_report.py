@@ -16,7 +16,7 @@ import math
 import subprocess
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 
@@ -37,7 +37,7 @@ LIVE_START_DATE = date(2026, 10, 3)
 def _load_json(path: Path) -> dict[str, Any]:
     """Load a JSON file; return empty dict if missing or unreadable."""
     try:
-        return json.loads(path.read_text())
+        return cast("dict[str, Any]", json.loads(path.read_text()))
     except Exception:
         return {}
 
@@ -155,7 +155,7 @@ def generate_report(
 
     # ---- Power estimate -----------------------------------------------------
     power_rows = "\n".join(f"| {h}d | {_power_note(months_live, h)} |" for h in [1, 5, 21])
-    power_table = "| Horizon | Status |\n" "|---------|--------|\n" + power_rows
+    power_table = "| Horizon | Status |\n|---------|--------|\n" + power_rows
 
     # Estimate adequate-power date for the hardest horizon (21d)
     months_needed_21d = POWER_THRESHOLDS[21]
@@ -298,7 +298,7 @@ _No amendments recorded. See `study/AMENDMENTS.md` for any deviations from the p
 ## 8. Next Month Focus
 
 - Continue daily signal collection
-- {'Evaluate whether any signal passes the BH-FDR threshold after more data accrues.' if sig_count == 0 else f'{sig_count} signal(s) currently significant — monitor stability over next month.'}
+- {"Evaluate whether any signal passes the BH-FDR threshold after more data accrues." if sig_count == 0 else f"{sig_count} signal(s) currently significant — monitor stability over next month."}
 - Monitor prediction ledger hit rates vs baselines as more outcomes arrive
 
 ---

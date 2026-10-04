@@ -13,7 +13,7 @@ Public surface:
 from __future__ import annotations
 
 import warnings
-from typing import NamedTuple
+from typing import NamedTuple, SupportsInt, cast
 
 import numpy as np
 import pandas as pd
@@ -74,7 +74,7 @@ def compute_ic(df: pd.DataFrame) -> list[ICResult]:
         results.append(
             ICResult(
                 feature=str(feature),
-                horizon=int(horizon),
+                horizon=int(cast("SupportsInt", horizon)),
                 cohort=str(cohort),
                 mean_ic=mean_ic,
                 ic_std=ic_std,
@@ -153,7 +153,7 @@ def compute_quintiles(df: pd.DataFrame) -> list[QuintileResult]:
         results.append(
             QuintileResult(
                 feature=str(feature),
-                horizon=int(horizon),
+                horizon=int(cast("SupportsInt", horizon)),
                 cohort=str(cohort),
                 quintile_means=q_means_out,
                 spread_mean=spread_mean,
@@ -216,7 +216,7 @@ def compute_fama_macbeth(df: pd.DataFrame, controls: list[str] | None = None) ->
     for (feature, horizon, cohort), grp in df.groupby(
         ["feature_name", "horizon", "cohort"], sort=False
     ):
-        nw_lags = max(int(horizon), 5)
+        nw_lags = max(int(cast("SupportsInt", horizon)), 5)
         period_coefs: list[float] = []
 
         for _date, day_grp in grp.groupby("date"):
@@ -252,7 +252,7 @@ def compute_fama_macbeth(df: pd.DataFrame, controls: list[str] | None = None) ->
         results.append(
             FMBResult(
                 feature=str(feature),
-                horizon=int(horizon),
+                horizon=int(cast("SupportsInt", horizon)),
                 cohort=str(cohort),
                 avg_coeff=avg_coeff,
                 nw_se=nw_se,

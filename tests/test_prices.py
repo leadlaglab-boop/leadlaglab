@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from pipeline.sources.base import DateRange
 from pipeline.sources.stooq import StooqPriceSource
-
 
 FAKE_STOOQ_CSV = """Date,Open,High,Low,Close,Volume
 2024-01-02,185.00,188.50,184.50,187.15,55000000
@@ -99,7 +97,9 @@ def test_stooq_404_returns_empty(stooq: StooqPriceSource) -> None:
 
 
 def test_stooq_filters_zero_close(stooq: StooqPriceSource) -> None:
-    csv_with_zero = "Date,Open,High,Low,Close,Volume\n2024-01-02,0,0,0,0,0\n2024-01-03,185,188,184,187,5000\n"
+    csv_with_zero = (
+        "Date,Open,High,Low,Close,Volume\n2024-01-02,0,0,0,0,0\n2024-01-03,185,188,184,187,5000\n"
+    )
     with patch("requests.get") as mock_get:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -147,7 +147,7 @@ def test_backfilled_observed_at_is_market_close(stooq: StooqPriceSource) -> None
 
 def test_live_observed_at_is_recent(stooq: StooqPriceSource) -> None:
     """For live records, observed_at should be close to now (not a historical date)."""
-    before = datetime.now(tz=timezone.utc)
+    before = datetime.now(tz=UTC)
 
     with patch("requests.get") as mock_get:
         mock_resp = MagicMock()
@@ -163,7 +163,7 @@ def test_live_observed_at_is_recent(stooq: StooqPriceSource) -> None:
             data_type="live",
         )
 
-    after = datetime.now(tz=timezone.utc)
+    after = datetime.now(tz=UTC)
     for r in records:
         assert before <= r["observed_at"] <= after, (
             f"Live observed_at={r['observed_at']} is not within expected range"

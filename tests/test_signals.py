@@ -68,11 +68,7 @@ class TestWikipediaPageviewsSource:
 
         map_path = tmp_path / "wikipedia_article_map.yaml"
         map_path.write_text(
-            "overrides:\n"
-            "  AAPL:\n"
-            "    articles:\n"
-            "      - Apple Inc.\n"
-            "    ambiguous: false\n"
+            "overrides:\n  AAPL:\n    articles:\n      - Apple Inc.\n    ambiguous: false\n"
         )
         return WikipediaPageviewsSource(map_path, lookup_cache_path=None)
 
@@ -490,12 +486,10 @@ class TestSignalIngestor:
         article_map = tmp_path / "config" / "wikipedia_article_map.yaml"
         article_map.parent.mkdir()
         article_map.write_text(
-            "overrides:\n" "  AAPL:\n" "    articles: [Apple Inc.]\n" "    ambiguous: false\n"
+            "overrides:\n  AAPL:\n    articles: [Apple Inc.]\n    ambiguous: false\n"
         )
         aliases = tmp_path / "config" / "gdelt_entity_aliases.yaml"
-        aliases.write_text(
-            "aliases:\n" "  AAPL:\n" "    primary: '\"Apple\"'\n" "    ambiguous: false\n"
-        )
+        aliases.write_text("aliases:\n  AAPL:\n    primary: '\"Apple\"'\n    ambiguous: false\n")
 
         data_repo = tmp_path / "data"
         data_repo.mkdir()

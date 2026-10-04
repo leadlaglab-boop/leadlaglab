@@ -105,7 +105,7 @@ const hasData = evalResults.results.length > 0;
     )}
   </div>
 
-  <script>
+  {hasData && <script>
     let evalData: { results?: Array<{ feature: string; cohort: string; horizon_days: number; ic_mean: number; ic_tstat: number; n_obs: number; quintile_spread: number; ic_series?: Array<{ date: string; ic: number }> }> } = { results: [] };
 
     async function init() {
@@ -284,7 +284,7 @@ const hasData = evalResults.results.length > 0;
     } // end init
 
     init();
-  </script>
+  </script>}
 </Base>
 
 <style>

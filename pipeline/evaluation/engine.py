@@ -18,6 +18,7 @@ import hashlib
 import json
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any, SupportsInt, cast
 
 import numpy as np
 import pandas as pd
@@ -28,6 +29,7 @@ import structlog
 from pipeline.evaluation.metrics import (
     FMBResult,
     ICResult,
+    QuintileResult,
     apply_bh_fdr,
     compute_fama_macbeth,
     compute_ic,
@@ -150,7 +152,7 @@ def _load_eval_data(
 # ---------------------------------------------------------------------------
 
 
-def _ic_to_rows(results: list[ICResult], eval_type: str) -> list[dict]:
+def _ic_to_rows(results: list[ICResult], eval_type: str) -> list[dict[str, Any]]:
     rows = []
     for r in results:
         rows.append(
@@ -171,7 +173,7 @@ def _ic_to_rows(results: list[ICResult], eval_type: str) -> list[dict]:
     return rows
 
 
-def _fmb_to_rows(results: list[FMBResult], eval_type: str) -> list[dict]:
+def _fmb_to_rows(results: list[FMBResult], eval_type: str) -> list[dict[str, Any]]:
     rows = []
     for r in results:
         rows.append(
@@ -192,7 +194,9 @@ def _fmb_to_rows(results: list[FMBResult], eval_type: str) -> list[dict]:
     return rows
 
 
-def _quintile_to_rows(results, eval_type: str) -> tuple[list[dict], list[dict]]:
+def _quintile_to_rows(
+    results: list[QuintileResult], eval_type: str
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Returns (summary_rows, quintile_rows)."""
     summary, detail = [], []
     for r in results:
@@ -225,7 +229,7 @@ def _quintile_to_rows(results, eval_type: str) -> tuple[list[dict], list[dict]]:
     return summary, detail
 
 
-def _apply_bh_to_rows(rows: list[dict], q: float = 0.05) -> list[dict]:
+def _apply_bh_to_rows(rows: list[dict[str, Any]], q: float = 0.05) -> list[dict[str, Any]]:
     """In-place apply BH FDR to IC rows (primary metric for the 48-test matrix)."""
     ic_rows = [r for r in rows if r["metric"] == "ic" and r["eval_type"] == "is"]
     p_vals = [r["p_value_raw"] for r in ic_rows]
@@ -247,7 +251,7 @@ def _apply_bh_to_rows(rows: list[dict], q: float = 0.05) -> list[dict]:
 def _extract_ic_series(
     data: pd.DataFrame,
     eval_type: str,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Extract per-date IC values for time-series charts."""
     from scipy import stats as _stats
 
@@ -267,7 +271,7 @@ def _extract_ic_series(
                 rows.append(
                     {
                         "feature": str(feature),
-                        "horizon": int(horizon),
+                        "horizon": int(cast("SupportsInt", horizon)),
                         "cohort": str(cohort),
                         "eval_type": eval_type,
                         "date": d,
@@ -302,9 +306,9 @@ def run_evaluation(
     if data.empty:
         raise RuntimeError("No feature+return data assembled. Run features and prices first.")
 
-    all_rows: list[dict] = []
-    ic_series_rows: list[dict] = []
-    quintile_rows: list[dict] = []
+    all_rows: list[dict[str, Any]] = []
+    ic_series_rows: list[dict[str, Any]] = []
+    quintile_rows: list[dict[str, Any]] = []
 
     # ------------------------------------------------------------------
     # In-sample metrics (all data)
@@ -377,7 +381,7 @@ def run_evaluation(
     return out_dir
 
 
-def _write_results(rows: list[dict], out_dir: Path) -> None:
+def _write_results(rows: list[dict[str, Any]], out_dir: Path) -> None:
     if not rows:
         return
     df = pd.DataFrame(rows)
@@ -390,7 +394,7 @@ def _write_results(rows: list[dict], out_dir: Path) -> None:
     log.info("engine.wrote_results", path=str(out_dir / "results.parquet"), rows=len(df))
 
 
-def _write_ic_series(rows: list[dict], out_dir: Path) -> None:
+def _write_ic_series(rows: list[dict[str, Any]], out_dir: Path) -> None:
     if not rows:
         return
     df = pd.DataFrame(rows)
@@ -402,7 +406,7 @@ def _write_ic_series(rows: list[dict], out_dir: Path) -> None:
     log.info("engine.wrote_ic_series", rows=len(df))
 
 
-def _write_quintile_returns(rows: list[dict], out_dir: Path) -> None:
+def _write_quintile_returns(rows: list[dict[str, Any]], out_dir: Path) -> None:
     if not rows:
         return
     df = pd.DataFrame(rows)
@@ -445,18 +449,18 @@ def load_eval_results(data_repo: Path) -> pd.DataFrame:
     path = data_repo / "processed" / "evaluation" / "results.parquet"
     if not path.exists():
         return pd.DataFrame()
-    return pq.read_table(path).to_pandas()
+    return cast("pd.DataFrame", pq.read_table(path).to_pandas())
 
 
 def load_ic_series(data_repo: Path) -> pd.DataFrame:
     path = data_repo / "processed" / "evaluation" / "ic_series.parquet"
     if not path.exists():
         return pd.DataFrame()
-    return pq.read_table(path).to_pandas()
+    return cast("pd.DataFrame", pq.read_table(path).to_pandas())
 
 
 def load_quintile_returns(data_repo: Path) -> pd.DataFrame:
     path = data_repo / "processed" / "evaluation" / "quintile_returns.parquet"
     if not path.exists():
         return pd.DataFrame()
-    return pq.read_table(path).to_pandas()
+    return cast("pd.DataFrame", pq.read_table(path).to_pandas())

@@ -47,6 +47,8 @@ dev = [
     "types-requests",
     "types-PyYAML",
     "types-python-dateutil",
+    "pandas-stubs",
+    "scipy-stubs",
 ]
 
 [project.scripts]
@@ -85,6 +87,20 @@ python_version = "3.12"
 strict = true
 warn_return_any = true
 warn_unused_configs = true
+
+# Third-party packages that ship neither inline types nor a stubs package.
+[[tool.mypy.overrides]]
+module = [
+    "pyarrow.*",
+    "pandas_market_calendars.*",
+    "pytrends.*",
+    "yfinance.*",
+    "sklearn.*",
+    "statsmodels.*",
+    "vaderSentiment.*",
+    "transformers.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

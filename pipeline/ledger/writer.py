@@ -22,7 +22,7 @@ import pickle
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -175,7 +175,7 @@ def _make_prediction_rows(
 # ---------------------------------------------------------------------------
 
 
-def _append_to_ledger(rows: list[dict], data_repo: Path, as_of: date) -> Path:
+def _append_to_ledger(rows: list[dict[str, Any]], data_repo: Path, as_of: date) -> Path:
     """
     Write a date-partitioned Parquet file.  Never overwrites existing files.
     Returns the path written.
@@ -304,4 +304,4 @@ def load_ledger(data_repo: Path) -> pd.DataFrame:
     if not parts:
         return pd.DataFrame()
 
-    return pd.concat(parts, ignore_index=True)
+    return cast("pd.DataFrame", pd.concat(parts, ignore_index=True))

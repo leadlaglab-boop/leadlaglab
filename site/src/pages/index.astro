@@ -31,6 +31,31 @@ const topSignals = evalResults.results
 
 const hasData = universe.securities.length > 0;
 const hasEval = evalResults.results.length > 0;
+
+// ── Universe coverage chart (build-time, real data from universe.json) ──────
+// Count by GICS sector; retail attention shown separately.
+const sp500Securities = universe.securities.filter((s) => s.cohort === "sp500");
+const retailSecurities = universe.securities.filter((s) => s.cohort === "retail_attention");
+
+// Sector counts for S&P 500 names only, sorted descending
+const sectorMap = new Map<string, number>();
+for (const s of sp500Securities) {
+  sectorMap.set(s.gics_sector, (sectorMap.get(s.gics_sector) ?? 0) + 1);
+}
+const sectorData = [...sectorMap.entries()]
+  .sort((a, b) => b[1] - a[1])
+  .slice(0, 11); // cap at 11 GICS sectors
+
+// SVG bar chart dimensions
+const chartW = 540;
+const chartH = 260;
+const barH = 18;
+const barGap = 5;
+const labelW = 168;
+const countW = 36;
+const plotW = chartW - labelW - countW - 16;
+const maxCount = sectorData.length > 0 ? sectorData[0][1] : 1;
+const chartContentH = sectorData.length * (barH + barGap);
 ---
 
 <Base title="Lead/Lag Lab" description="Open research: does alternative data predict stock returns? Live predictions, honest evaluation, null results included.">
@@ -47,8 +72,7 @@ const hasEval = evalResults.results.length > 0;
         {asOf && (
           <p class="hero-meta text-muted text-sm">
             Data through <strong>{asOf}</strong> ·
-            {universe.sp500_count} S&P 500 names ·
-            {universe.retail_attention_count} retail-attention names
+            Universe: {universe.sp500_count} S&P 500 + {universe.retail_attention_count} retail-attention
           </p>
         )}
       </div>
@@ -191,6 +215,98 @@ const hasEval = evalResults.results.length > 0;
     </div>
   </section>
 
+  <!-- Universe coverage chart -->
+  {hasData && (
+    <section class="section">
+      <div class="container">
+        <h2 class="section-label">Research universe — coverage by sector</h2>
+
+        <div class="coverage-layout">
+          <!-- Left: bar chart -->
+          <div class="chart-block">
+            <p class="chart-subtitle text-sm text-muted">
+              S&P 500 constituents tracked by GICS sector (n = {sp500Securities.length} names,
+              as of {universe.as_of || asOf || "—"})
+            </p>
+
+            <svg
+              role="img"
+              aria-label={`Bar chart: S&P 500 coverage by GICS sector. Largest sector is ${sectorData[0]?.[0] ?? "—"} with ${sectorData[0]?.[1] ?? 0} names.`}
+              viewBox={`0 0 ${chartW} ${chartContentH + 28}`}
+              class="coverage-chart"
+              width={chartW}
+              height={chartContentH + 28}
+            >
+              <!-- Axis labels -->
+              <text x={labelW} y={chartContentH + 22} class="chart-axis-label" text-anchor="start">0</text>
+              <text x={labelW + plotW} y={chartContentH + 22} class="chart-axis-label" text-anchor="end">{maxCount} names</text>
+              <!-- Baseline -->
+              <line x1={labelW} y1={0} x2={labelW} y2={chartContentH + 6} class="chart-axis" />
+
+              {sectorData.map(([sector, count], i) => {
+                const y = i * (barH + barGap);
+                const barWidth = Math.round((count / maxCount) * plotW);
+                const isLargest = i === 0;
+                return (
+                  <>
+                    <text
+                      x={labelW - 6}
+                      y={y + barH * 0.73}
+                      class="chart-bar-label"
+                      text-anchor="end"
+                    >
+                      {sector}
+                    </text>
+                    <rect
+                      x={labelW}
+                      y={y}
+                      width={barWidth}
+                      height={barH}
+                      class={`chart-bar ${isLargest ? "chart-bar-accent" : ""}`}
+                      rx={2}
+                    />
+                    <text
+                      x={labelW + barWidth + 5}
+                      y={y + barH * 0.73}
+                      class="chart-bar-count text-mono"
+                    >
+                      {count}
+                    </text>
+                  </>
+                );
+              })}
+            </svg>
+          </div>
+
+          <!-- Right: coverage summary cards -->
+          <div class="coverage-summary">
+            <div class="card coverage-card">
+              <div class="stat-label">S&P 500 universe</div>
+              <div class="stat-value">{sp500Securities.length}</div>
+              <div class="stat-caption">names in universe across {sectorData.length} GICS sectors</div>
+            </div>
+            <div class="card coverage-card">
+              <div class="stat-label">Retail attention basket</div>
+              <div class="stat-value">{retailSecurities.length}</div>
+              <div class="stat-caption">high-retail-interest names (GME, AMC, etc.)</div>
+            </div>
+            <div class="card coverage-card">
+              <div class="stat-label">Tickers with data</div>
+              <div class="stat-value" id="tickers-with-data">—</div>
+              <div class="stat-caption">price series collected so far</div>
+            </div>
+            <p class="coverage-note text-xs text-muted">
+              Universe of {universe.securities.length} names as of {universe.as_of || asOf || "—"}.
+              Data collection starts when the daily pipeline runs.
+              Evaluation uses only names present in the S&P 500 on the <em>feature date</em>
+              (point-in-time; no look-ahead).
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  )}
+
   <!-- Design principles / disclaimer strip -->
   <section class="section">
     <div class="container">
@@ -315,4 +431,87 @@ const hasEval = evalResults.results.length > 0;
 
   .signal-link { text-decoration: none; color: var(--color-accent); }
   .signal-link:hover { text-decoration: underline; }
+
+  /* ── Universe coverage chart ────────────────────────────────────────────── */
+  .coverage-layout {
+    display: grid;
+    grid-template-columns: 1fr minmax(min(100%, 18rem), 22rem);
+    gap: var(--space-10);
+    align-items: start;
+  }
+
+  @media (max-width: 56rem) {
+    .coverage-layout { grid-template-columns: 1fr; }
+  }
+
+  .chart-block { display: flex; flex-direction: column; gap: var(--space-3); }
+
+  .chart-subtitle { margin-bottom: var(--space-2); }
+
+  .coverage-chart {
+    width: 100%;
+    max-width: 540px;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+
+  .chart-bar {
+    fill: var(--color-accent);
+    opacity: 0.55;
+  }
+
+  .chart-bar-accent { opacity: 0.85; }
+
+  .chart-axis {
+    stroke: var(--color-border);
+    stroke-width: 1;
+  }
+
+  .chart-bar-label {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--color-text-muted);
+    dominant-baseline: middle;
+  }
+
+  .chart-bar-count {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    fill: var(--color-text-muted);
+    dominant-baseline: middle;
+  }
+
+  .chart-axis-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    fill: var(--color-text-faint, var(--color-text-muted));
+  }
+
+  .coverage-summary {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .coverage-card {
+    padding: var(--space-5);
+  }
+
+  .coverage-note {
+    line-height: 1.6;
+    padding: var(--space-3) 0;
+  }
 </style>
+
+<script>
+  fetch("/data/prices_sample.json")
+    .then((r) => r.json())
+    .then((d) => {
+      const el = document.getElementById("tickers-with-data");
+      if (!el) return;
+      const count = d.series ? Object.keys(d.series).length : 0;
+      el.textContent = count === 0 ? "0" : String(count);
+    })
+    .catch(() => {});
+</script>

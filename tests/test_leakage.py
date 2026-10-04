@@ -18,7 +18,6 @@ from hypothesis import strategies as st
 
 from pipeline.utils.calendar import market_close_utc
 
-
 # ---------------------------------------------------------------------------
 # Invariant helpers
 # ---------------------------------------------------------------------------
@@ -33,7 +32,7 @@ def assert_no_future_observed_at(
     for ts in observed_at_values:
         # Normalize to UTC for comparison
         if ts.tzinfo is None:
-            ts = ts.replace(tzinfo=datetime.timezone.utc)
+            ts = ts.replace(tzinfo=datetime.UTC)
         assert ts < cutoff, (
             f"Look-ahead detected: observed_at={ts.isoformat()} is not before "
             f"market_close({feature_date.isoformat()})={cutoff.isoformat()}"
@@ -53,9 +52,7 @@ def assert_no_future_observed_at(
     hours_before_close=st.floats(min_value=0.001, max_value=72.0),
 )
 @settings(max_examples=500)
-def test_data_before_cutoff_passes(
-    feature_date: datetime.date, hours_before_close: float
-) -> None:
+def test_data_before_cutoff_passes(feature_date: datetime.date, hours_before_close: float) -> None:
     """Data collected strictly before market close must not trigger leakage detection."""
     cutoff = market_close_utc(feature_date.isoformat())
     observed = cutoff - datetime.timedelta(hours=hours_before_close)
@@ -70,9 +67,7 @@ def test_data_before_cutoff_passes(
     hours_after_close=st.floats(min_value=0.001, max_value=72.0),
 )
 @settings(max_examples=500)
-def test_data_after_cutoff_fails(
-    feature_date: datetime.date, hours_after_close: float
-) -> None:
+def test_data_after_cutoff_fails(feature_date: datetime.date, hours_after_close: float) -> None:
     """Data collected after market close must be detected as look-ahead."""
     cutoff = market_close_utc(feature_date.isoformat())
     observed = cutoff + datetime.timedelta(hours=hours_after_close)

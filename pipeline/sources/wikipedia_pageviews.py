@@ -16,9 +16,10 @@ import json
 import time
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
+import pyarrow as pa
 import requests
 import structlog
 import yaml
@@ -48,7 +49,7 @@ class WikipediaPageviewsSource(SourcePlugin):
     def __init__(self, article_map_path: Path, lookup_cache_path: Path | None = None) -> None:
         with open(article_map_path) as f:
             cfg = yaml.safe_load(f)
-        self._overrides: dict[str, dict] = cfg.get("overrides", {})
+        self._overrides: dict[str, dict[str, Any]] = cfg.get("overrides", {})
         self._lookup_cache_path = lookup_cache_path
         self._lookup_cache: dict[str, str | None] = {}
         if lookup_cache_path and lookup_cache_path.exists():
@@ -74,7 +75,7 @@ class WikipediaPageviewsSource(SourcePlugin):
     def get_articles(self, ticker: str, name: str) -> list[str]:
         """Return list of Wikipedia article titles to sum for this ticker."""
         if ticker in self._overrides:
-            return self._overrides[ticker].get("articles", [name])
+            return cast("list[str]", self._overrides[ticker].get("articles", [name]))
         # Auto-lookup via opensearch
         if ticker not in self._lookup_cache:
             self._lookup_cache[ticker] = self._opensearch(name)
@@ -186,5 +187,5 @@ class WikipediaPageviewsSource(SourcePlugin):
         return len(records) > 0
 
     @property
-    def schema(self):  # type: ignore[override]
+    def schema(self) -> pa.Schema:
         return SIGNAL_RAW_SCHEMA

@@ -27,6 +27,9 @@ const meanError = scored.length > 0
         Every frozen prediction made before outcomes were known, with the model version and data hash.
         Scored as outcomes arrive. The ledger is immutable — predictions cannot be rewritten.
       </p>
+      {ledger.as_of && (
+        <p class="text-sm text-muted">As of {formatDate(ledger.as_of)}</p>
+      )}
     </header>
 
     <!-- Scorecard -->

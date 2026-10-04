@@ -6,7 +6,6 @@ import datetime
 
 import pandas_market_calendars as mcal
 
-
 _NYSE = mcal.get_calendar("NYSE")
 
 
@@ -19,7 +18,7 @@ def is_market_holiday(date_str: str) -> bool:
         start_date=date_str,
         end_date=date_str,
     )
-    return schedule.empty
+    return bool(schedule.empty)
 
 
 def market_close_utc(date_str: str) -> datetime.datetime:
@@ -31,7 +30,7 @@ def market_close_utc(date_str: str) -> datetime.datetime:
 
     et = ZoneInfo("America/New_York")
     close_et = datetime.datetime(d.year, d.month, d.day, 16, 0, 0, tzinfo=et)
-    return close_et.astimezone(datetime.timezone.utc)
+    return close_et.astimezone(datetime.UTC)
 
 
 def prev_trading_day(date_str: str) -> str:

@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import pandas as pd
@@ -341,11 +341,11 @@ class FeatureBuilder:
 
                 for feat_name, grp in hist.groupby("feature_name"):
                     grp = grp.sort_values("effective_date").drop_duplicates("effective_date")
-                    grp = grp.set_index("effective_date")["raw_value"]
+                    values = grp.set_index("effective_date")["raw_value"]
 
                     # Compute rolling z-score on the full history
-                    z = rolling_zscore(grp, self.lookback_days, self.min_obs)
-                    n = rolling_nobs(grp, self.lookback_days)
+                    z = rolling_zscore(values, self.lookback_days, self.min_obs)
+                    n = rolling_nobs(values, self.lookback_days)
 
                     # Take the value as of window_end
                     if window_end not in z.index or pd.isna(z.loc[window_end]):
@@ -461,4 +461,4 @@ def load_features(
                 "schema_version",
             ]
         )
-    return pd.concat(frames, ignore_index=True)
+    return cast("pd.DataFrame", pd.concat(frames, ignore_index=True))

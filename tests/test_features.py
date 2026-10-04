@@ -326,9 +326,9 @@ class TestFeatureLookAhead:
             if path.exists():
                 df = pq.read_table(path).to_pandas()
                 for obs_at in pd.to_datetime(df["observed_at"], utc=True):
-                    assert (
-                        obs_at < cutoff
-                    ), f"observed_at {obs_at} is not before market_close({target}) = {cutoff}"
+                    assert obs_at < cutoff, (
+                        f"observed_at {obs_at} is not before market_close({target}) = {cutoff}"
+                    )
             current += timedelta(days=1)
 
 

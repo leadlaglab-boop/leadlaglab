@@ -75,10 +75,8 @@ def _find_current_table(tables: list[pd.DataFrame]) -> pd.DataFrame | None:
         has_symbol = _find_col(norm_cols, _SYMBOL_VARIANTS) is not None
         has_sector = _find_col(norm_cols, _SECTOR_VARIANTS) is not None
         has_name = _find_col(norm_cols, _NAME_VARIANTS) is not None
-        if has_symbol and has_sector and has_name:
-            # Prefer the table with more rows (the real one has 500+)
-            if best is None or len(t) > len(best):
-                best = t
+        if has_symbol and has_sector and has_name and (best is None or len(t) > len(best)):
+            best = t
     return best
 
 
@@ -135,26 +133,13 @@ def fetch_current_and_changes(
     current = pd.DataFrame(
         {
             "ticker": (
-                current_raw[sym_col]
-                .astype(str)
-                .str.strip()
-                .str.replace(r"\.", "-", regex=True)
+                current_raw[sym_col].astype(str).str.strip().str.replace(r"\.", "-", regex=True)
             ),
             "name": current_raw[name_col].astype(str).str.strip(),
             "gics_sector": current_raw[sector_col].astype(str).str.strip(),
-            "gics_sub_industry": (
-                current_raw[sub_col].astype(str).str.strip()
-                if sub_col
-                else ""
-            ),
-            "date_added": (
-                current_raw[date_col].astype(str) if date_col else None
-            ),
-            "cik": (
-                current_raw[cik_col].astype(str).str.zfill(10)
-                if cik_col
-                else None
-            ),
+            "gics_sub_industry": (current_raw[sub_col].astype(str).str.strip() if sub_col else ""),
+            "date_added": (current_raw[date_col].astype(str) if date_col else None),
+            "cik": (current_raw[cik_col].astype(str).str.zfill(10) if cik_col else None),
         }
     )
     current = current[current["ticker"].str.len() > 0]
@@ -168,8 +153,14 @@ def fetch_current_and_changes(
             "This is a known limitation; see docs/DATA_SOURCES.md."
         )
         empty_changes = pd.DataFrame(
-            columns=["date", "added_ticker", "added_name",
-                     "removed_ticker", "removed_name", "reason"]
+            columns=[
+                "date",
+                "added_ticker",
+                "added_name",
+                "removed_ticker",
+                "removed_name",
+                "reason",
+            ]
         )
         log.info(
             "wikipedia fetch complete (current only)",
@@ -202,28 +193,16 @@ def fetch_current_and_changes(
                 errors="coerce",
             ).dt.date,
             "added_ticker": (
-                changes_raw[add_ticker_c].astype(str).str.strip()
-                if add_ticker_c
-                else None
+                changes_raw[add_ticker_c].astype(str).str.strip() if add_ticker_c else None
             ),
-            "added_name": (
-                changes_raw[add_name_c].astype(str).str.strip()
-                if add_name_c
-                else None
-            ),
+            "added_name": (changes_raw[add_name_c].astype(str).str.strip() if add_name_c else None),
             "removed_ticker": (
-                changes_raw[rem_ticker_c].astype(str).str.strip()
-                if rem_ticker_c
-                else None
+                changes_raw[rem_ticker_c].astype(str).str.strip() if rem_ticker_c else None
             ),
             "removed_name": (
-                changes_raw[rem_name_c].astype(str).str.strip()
-                if rem_name_c
-                else None
+                changes_raw[rem_name_c].astype(str).str.strip() if rem_name_c else None
             ),
-            "reason": (
-                changes_raw[reason_c].astype(str) if reason_c else None
-            ),
+            "reason": (changes_raw[reason_c].astype(str) if reason_c else None),
         }
     ).dropna(subset=["date"])
 

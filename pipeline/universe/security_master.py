@@ -13,10 +13,9 @@ Ticker change handling:
 
 from __future__ import annotations
 
-import os
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 import pyarrow as pa
@@ -45,7 +44,7 @@ KNOWN_TICKER_CHANGES: dict[str, tuple[str, date, str]] = {
 def _load_retail_basket(config_path: Path) -> list[dict[str, Any]]:
     with open(config_path) as f:
         cfg = yaml.safe_load(f)
-    return cfg.get("tickers", [])
+    return cast("list[dict[str, Any]]", cfg.get("tickers", []))
 
 
 def build_security_master(
@@ -60,7 +59,6 @@ def build_security_master(
     Returns the DataFrame for immediate use.
     """
     target = as_of or date.today()
-    now = datetime.now(tz=timezone.utc)
 
     log.info("building security master", as_of=target.isoformat())
 
@@ -200,12 +198,10 @@ def load_security_master(data_repo_path: Path) -> pd.DataFrame:
     sm_dir = data_repo_path / "processed" / "security_master"
     files = sorted(sm_dir.glob("security_master_*.parquet"))
     if not files:
-        raise FileNotFoundError(
-            f"No security master found in {sm_dir}. Run `lll-universe` first."
-        )
+        raise FileNotFoundError(f"No security master found in {sm_dir}. Run `lll-universe` first.")
     latest = files[-1]
     log.info("loading security master", path=str(latest))
-    return pq.read_table(latest).to_pandas()
+    return cast("pd.DataFrame", pq.read_table(latest).to_pandas())
 
 
 def get_active_tickers(
@@ -216,10 +212,7 @@ def get_active_tickers(
     """Return tickers active on `as_of` date, optionally filtered by cohort."""
     target = as_of or date.today()
 
-    active = sm[
-        (sm["valid_from"] <= target)
-        & (sm["valid_to"].isna() | (sm["valid_to"] >= target))
-    ]
+    active = sm[(sm["valid_from"] <= target) & (sm["valid_to"].isna() | (sm["valid_to"] >= target))]
 
     if cohort:
         active = active[active["cohort"] == cohort]
