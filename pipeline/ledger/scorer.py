@@ -21,6 +21,7 @@ import structlog
 
 from pipeline.evaluation.returns import compute_excess_returns
 from pipeline.ledger.writer import load_ledger
+from pipeline.utils.calendar import prev_trading_day
 from pipeline.validate.schemas import OUTCOME_SCHEMA, SCHEMA_VERSION
 
 log = structlog.get_logger()
@@ -66,9 +67,13 @@ def score_predictions(data_repo: Path, as_of: date | None = None) -> pd.DataFram
 
     log.info("scorer.scoring", n=len(pending), as_of=str(as_of))
 
-    # Determine date range needed for returns
+    # Returns are keyed by decision date d and cover trading days d+1 .. d+h, so the
+    # key for a prediction is the last trading day before its target window starts.
     pending["target_date_start"] = pd.to_datetime(pending["target_date_start"]).dt.date
-    min_date = pending["target_date_start"].min()
+    pending["decision_date"] = [
+        date.fromisoformat(prev_trading_day(d.isoformat())) for d in pending["target_date_start"]
+    ]
+    min_date = pending["decision_date"].min()
     max_date = pending["target_date_end"].max()
 
     # Fetch realized returns (ticker-level)
@@ -76,7 +81,7 @@ def score_predictions(data_repo: Path, as_of: date | None = None) -> pd.DataFram
         data_repo,
         start=min_date,
         end=max_date,
-        horizons=tuple(sorted(pending["horizon_days"].unique())),
+        horizons=tuple(int(h) for h in sorted(pending["horizon_days"].unique())),
     )
 
     if returns_df.empty:
@@ -103,7 +108,7 @@ def score_predictions(data_repo: Path, as_of: date | None = None) -> pd.DataFram
         ticker = id_to_ticker.get(pred["security_id"])
         if ticker is None:
             continue
-        key = (ticker, pred["target_date_start"], int(pred["horizon_days"]))
+        key = (ticker, pred["decision_date"], int(pred["horizon_days"]))
         realized = ret_lookup.get(key)
         if realized is None or np.isnan(realized):
             continue

@@ -137,7 +137,9 @@ class SignalIngestor:
         # trends is opt-in: excluded from default run due to ToS uncertainty (unofficial scraper)
         enabled = set(sources or ["wikipedia", "edgar", "gdelt"])
         sm = load_security_master(self.data_repo)
-        active = sm[sm["valid_to"].isna()].copy()
+        # The archive is keyed by ticker, so fetch each ticker once even when it sits in
+        # both cohorts (e.g. TSLA); keep the first row, which is the S&P 500 one.
+        active = sm[sm["valid_to"].isna()].drop_duplicates("ticker").copy()
         if max_tickers:
             active = active.head(max_tickers)
 
